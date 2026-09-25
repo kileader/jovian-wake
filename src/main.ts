@@ -36,7 +36,7 @@ function briefing() {
   return `<p class="eyebrow">CAPTAIN’S BRIEFING / DECKBUILDING EXPERIMENT</p><h2 id="dispatch-title" tabindex="-1">There is no resupply.</h2>
     <p class="dispatch-body">Life beneath Europa’s ice. A foothold on Callisto. Thirty people carrying everything they need across the dark. Build the crew’s routines and decide what arrives with you.</p>
     <ol class="briefing-steps">
-      <li><span>01</span><div><strong>Draw five. Start with 1 Ops and 1 Buy.</strong><p>Play Ops for effects, then Work to prepare new cards. Acquired cards go to your discard pile and return after a shuffle.</p></div></li>
+      <li><span>01</span><div><strong>Draw five. Start with 1 Ops play and 1 Buy.</strong><p>Play Ops for effects, then Work to prepare new cards. Acquired cards go to your discard pile and return after a shuffle.</p></div></li>
       <li><span>02</span><div><strong>Cruise → Event → Crisis. Repeat.</strong><p>Every third month tests your deck. Meet the displayed target for +${CRISIS_POINTS} points; otherwise gain one Burden and continue.</p></div></li>
       <li><span>03</span><div><strong>Bring something worth keeping.</strong><p>Cargo scores its printed points at arrival. Build enough Work to prepare more valuable Cargo, or retire it to improve your draws and forfeit those points. Burdens just take up space.</p></div></li>
     </ol>
@@ -49,7 +49,12 @@ function briefing() {
 function crisisTargets() {
   const crisis = getCurrentCrisis(state);
   if (!crisis) return '';
-  return `<div class="crisis-targets" aria-label="Crisis targets"><span class="${state.workGenerated >= crisis.requiredWork ? 'met' : ''}">Work generated <b>${state.workGenerated} / ${crisis.requiredWork}</b></span>${crisis.requiredOps ? `<span class="${state.opsPlayed >= crisis.requiredOps ? 'met' : ''}">Ops played <b>${state.opsPlayed} / ${crisis.requiredOps}</b></span>` : ''}</div><p class="microcopy">${crisis.requiredOps ? 'Both targets' : 'The target'} must be met when the month ends. Spent Work still counts. Success +${CRISIS_POINTS} points; failure adds ${h(cardById(crisis.burden).name)}.</p>`;
+  return `<div class="crisis-targets" aria-label="Crisis targets"><span class="${state.workGenerated >= crisis.requiredWork ? 'met' : ''}">Work generated <b>${state.workGenerated} / ${crisis.requiredWork}</b></span>${crisis.requiredOps ? `<span class="${state.opsPlayed >= crisis.requiredOps ? 'met' : ''}">Ops cards played <b>${state.opsPlayed} / ${crisis.requiredOps}</b></span>` : ''}</div><p class="microcopy">${crisis.requiredOps ? 'Both targets' : 'The target'} must be met when the month ends. Spent Work still counts. Success +${CRISIS_POINTS} points; failure adds one ${h(cardById(crisis.burden).name)} and the voyage continues.</p>${burdenPreview(crisis.burden)}`;
+}
+
+function burdenPreview(id: CardId) {
+  const card = cardById(id);
+  return `<aside class="burden-preview" id="burden-preview" aria-label="${h(card.name)} explained"><div><strong>${h(card.name)}</strong><span class="eyebrow">BURDEN</span></div><p>${h(card.text)}</p><p>Goes into your discard pile and returns in later shuffles. Retire it with a card such as Streamlining to remove it permanently.</p></aside>`;
 }
 
 function turnPanel() {
@@ -66,23 +71,23 @@ function turnPanel() {
 
 function eventDecision(effect: { count: number; cardType?: string; burden: CardId }) {
   const eligible = state.hand.filter(c => !effect.cardType || cardById(c.id).type === effect.cardType).length;
-  return `<div class="event-actions"><button class="secondary" data-action="event-discard" ${state.pending || eligible < effect.count ? 'disabled' : ''}>Discard ${effect.count} ${effect.cardType || 'cards'}</button><button class="secondary" data-action="event-burden" ${state.pending ? 'disabled' : ''}>Gain ${h(cardById(effect.burden).name)}</button></div>${eligible < effect.count ? '<p class="microcopy">You do not have enough eligible cards to pay the discard cost.</p>' : ''}`;
+  return `${burdenPreview(effect.burden)}<p class="microcopy">Discarding removes ${effect.count} ${effect.cardType ? `${effect.cardType} ` : ''}${effect.count === 1 ? 'card' : 'cards'} from this hand with no replacement draw. Those cards keep their points and can return after a shuffle. Gaining the Burden keeps your full hand this month.</p><div class="event-actions"><button class="secondary" data-action="event-discard" ${state.pending || eligible < effect.count ? 'disabled' : ''}>Discard ${effect.count} ${effect.cardType || 'cards'}</button><button class="secondary" data-action="event-burden" aria-describedby="burden-preview" ${state.pending ? 'disabled' : ''}>Gain ${h(cardById(effect.burden).name)}</button></div>${eligible < effect.count ? '<p class="microcopy">You do not have enough eligible cards to pay the discard cost.</p>' : ''}`;
 }
 
 function phaseControls() {
   const phase = state.phase;
   return `<nav class="phase-strip" aria-label="Monthly sequence">${[['ops', '1 · Ops'], ['work', '2 · Work'], ['buy', '3 · Acquire']].map(([key, label]) => `<span ${key === phase ? 'aria-current="step"' : ''}>${label}</span>`).join('<i aria-hidden="true">→</i>')}</nav>
     <div class="turn-actions">
-    ${phase === 'ops' ? `<p>${state.ops ? state.hand.some(c => cardById(c.id).type === 'Ops') ? `${state.ops} Ops remaining. Click an Ops card to play it.` : 'No Ops cards in hand. Play Work to acquire new cards.' : 'No Ops remaining. Move on to Work.'}</p><button class="primary" data-action="work" ${state.pending ? 'disabled' : ''}>${state.ops && state.hand.some(c => cardById(c.id).type === 'Ops') ? 'Finish Ops & play Work' : 'Play Work'} ${arrow}</button>` : ''}
+    ${phase === 'ops' ? `<p>${state.ops ? state.hand.some(c => cardById(c.id).type === 'Ops') ? `${state.ops} Ops plays remaining. Each Ops card spends one play, then applies its effects.` : 'No Ops cards in hand. Play Work to acquire new cards.' : 'No Ops plays remaining. Move on to Work.'} Playing Work ends the Ops phase.</p><button class="primary" data-action="work" ${state.pending ? 'disabled' : ''}>${state.ops && state.hand.some(c => cardById(c.id).type === 'Ops') ? 'Finish Ops & play Work' : 'Play Work'} ${arrow}</button>` : ''}
     ${phase === 'work' ? `<p>Play your Work cards, then acquire cards.</p><button class="primary" data-action="all-work" ${state.pending ? 'disabled' : ''}>Play all Work & acquire ${arrow}</button>` : ''}
-    ${phase === 'buy' ? `<p>${state.buys ? `Choose a supply pile below. ${state.buys} ${state.buys === 1 ? 'Buy' : 'Buys'} remaining.` : 'No Buys remaining. This month is ready to close.'}</p><button class="primary" data-action="end" ${state.pending ? 'disabled' : ''}>End month ${pad(state.month)} ${arrow}</button>` : ''}
+    ${phase === 'buy' ? `<p>${state.buys ? `Choose a supply pile below. ${state.buys} ${state.buys === 1 ? 'Buy' : 'Buys'} remaining.` : 'No Buys remaining. This month is ready to close.'} Ending the month discards your hand and played cards; unused Work, Ops plays, and Buys expire.</p><button class="primary" data-action="end" ${state.pending ? 'disabled' : ''}>End month ${pad(state.month)} ${arrow}</button>` : ''}
     ${phase === 'event' ? '<p>Resolve the event before playing your hand.</p>' : ''}</div>${mobileHorizon()}`;
 }
 
 function mobileHorizon() {
   const nextMonth = (Math.floor(state.month / 3) + 1) * 3;
   const crisis = CRISES[(nextMonth / 3 - 1) % CRISES.length];
-  return nextMonth <= state.totalMonths ? `<p class="mobile-horizon">Next crisis · M${pad(nextMonth)}: ${h(crisis.name)}. ${crisis.requiredWork} Work${crisis.requiredOps ? ` + ${crisis.requiredOps} Ops` : ''}; opening hand ${crisis.handSize}.</p>` : '';
+  return nextMonth <= state.totalMonths ? `<p class="mobile-horizon">Next crisis · M${pad(nextMonth)}: ${h(crisis.name)}. ${crisis.requiredWork} Work${crisis.requiredOps ? ` + ${crisis.requiredOps} Ops cards played` : ''}; opening hand ${crisis.handSize}.</p>` : '';
 }
 
 function report() {
@@ -95,7 +100,7 @@ function report() {
 }
 
 function nextEncounterText() {
-  return `Next: ${['Crisis', 'Cruise', 'Event'][(state.month + 1) % 3]}. Draw a new hand and reset to 1 Ops / 1 Buy.`;
+  return `Next: ${['Crisis', 'Cruise', 'Event'][(state.month + 1) % 3]}. Draw a new hand and reset to 1 Ops play / 1 Buy.`;
 }
 
 function arrival() {
@@ -117,16 +122,16 @@ function pendingPanel() {
   const title = p.source === 'event' ? 'Event response' : cardById(p.source).name;
   let body = '';
   if (p.kind === 'gain') {
-    body = `<p>Choose ${p.requiredType === 'Ops' ? 'an Ops' : 'a card'} costing up to ${p.maxCost} from the supply below. This gain uses no Work or Buy.</p>`;
+    body = `<p>Choose ${p.requiredType === 'Ops' ? 'an Ops card' : 'a card'} costing up to ${p.maxCost} Work from the supply below. It goes to your discard pile, not your hand. This gain uses no Work or Buy.</p>`;
   } else if (p.kind === 'inspect') {
     const kept = p.cards.filter(c => (inspection[c.uid] || 'keep') === 'keep');
     if (reverseKept) kept.reverse();
-    body = `<p>Choose what happens to each card. Kept cards return to the top of your deck.</p><div class="inspect-cards">${p.cards.map(c => `<label><strong>${h(cardById(c.id).name)}</strong><select data-inspect="${c.uid}" aria-label="Disposition for ${h(cardById(c.id).name)}"><option value="keep" ${(inspection[c.uid] || 'keep') === 'keep' ? 'selected' : ''}>Keep on top</option><option value="discard" ${inspection[c.uid] === 'discard' ? 'selected' : ''}>Discard</option><option value="retire" ${inspection[c.uid] === 'retire' ? 'selected' : ''}>Retire permanently</option></select></label>`).join('')}</div><p class="microcopy">Next draw: ${kept.map(c => h(cardById(c.id).name)).join(' → ') || 'No inspected cards kept'}</p><div class="selection-actions">${kept.length > 1 ? '<button class="secondary" data-action="reverse">Reverse kept order</button>' : ''}<button class="primary" data-action="confirm-inspect">Confirm inspection</button></div>`;
+    body = `<p>Keep returns a card to the top of your deck. Discard sets it aside until a shuffle. Retire removes it permanently and forfeits any Cargo points.</p><div class="inspect-cards">${p.cards.map(c => `<label><strong>${h(cardById(c.id).name)}</strong><small>${h(cardById(c.id).type)} · ${h(cardById(c.id).text)}</small><select data-inspect="${c.uid}" aria-label="Disposition for ${h(cardById(c.id).name)}"><option value="keep" ${(inspection[c.uid] || 'keep') === 'keep' ? 'selected' : ''}>Keep on top</option><option value="discard" ${inspection[c.uid] === 'discard' ? 'selected' : ''}>Discard</option><option value="retire" ${inspection[c.uid] === 'retire' ? 'selected' : ''}>Retire permanently</option></select></label>`).join('')}</div><p class="microcopy">Next draw: ${kept.map(c => h(cardById(c.id).name)).join(' → ') || 'No inspected cards kept'}</p><div class="selection-actions">${kept.length > 1 ? '<button class="secondary" data-action="reverse">Reverse kept order</button>' : ''}<button class="primary" data-action="confirm-inspect">Confirm inspection</button></div>`;
   } else {
     const verb = p.kind === 'retire' ? 'Retire' : 'Discard';
     const quantity = p.min === p.max ? `exactly ${p.min}` : `up to ${p.max}`;
-    const eligible = p.kind === 'discard' && p.requiredType ? `${p.requiredType} cards` : 'cards';
-    body = `<p>${verb} ${quantity} ${eligible} from your hand. ${p.kind === 'retire' ? 'Retired cards leave the deck permanently; Cargo loses its printed points.' : p.redraw ? 'Draw the same number afterward.' : 'Then begin the normal turn.'}</p><div class="selection-actions"><span>${selected.length} selected</span><button class="primary" data-action="confirm-selection" ${selected.length < p.min || selected.length > p.max ? 'disabled' : ''}>${selected.length ? `${verb} ${selected.length} ${selected.length === 1 ? 'card' : 'cards'}` : p.kind === 'retire' ? 'Retire no cards' : 'Discard no cards'}</button></div>`;
+    const eligible = `${p.kind === 'discard' && p.requiredType ? `${p.requiredType} ` : ''}${p.max === 1 ? 'card' : 'cards'}`;
+    body = `<p>${verb} ${quantity} ${eligible} from your hand. ${p.kind === 'retire' ? 'Retired cards leave the deck permanently; Cargo loses its printed points.' : p.redraw ? 'Draw the same number afterward. Discarded cards can return after a shuffle.' : 'No replacement cards are drawn. Discarded cards can return after a shuffle.'}</p><div class="selection-actions"><span>${selected.length} selected</span><button class="primary" data-action="confirm-selection" ${selected.length < p.min || selected.length > p.max ? 'disabled' : ''}>${selected.length < p.min ? `Select ${p.min - selected.length} more` : selected.length ? `${verb} ${selected.length} ${selected.length === 1 ? 'card' : 'cards'}` : p.kind === 'retire' ? 'Retire no cards' : 'Discard no cards'}</button></div>`;
   }
   return `<section class="pending-panel" tabindex="-1" aria-label="Resolve ${h(title)}"><p class="eyebrow">RESOLVE / ${h(title)}</p>${body}</section>`;
 }
@@ -161,7 +166,7 @@ function supplyCard(id: CardId) {
 
 function supplyPanel() {
   if (state.phase === 'arrived') return '';
-  return `<section class="supply-section" aria-labelledby="supply-title"><div class="section-heading"><div><p class="eyebrow">FIXED SUPPLY</p><h2 id="supply-title">Prepare what comes next.</h2></div><p>Acquisition spends crew time on training, fabrication, and preparing stores. New cards enter your discard pile.</p></div>
+  return `<section class="supply-section" aria-labelledby="supply-title"><div class="section-heading"><div><p class="eyebrow">FIXED SUPPLY</p><h2 id="supply-title">Prepare what comes next.</h2></div><p>Buying costs the printed Work amount plus 1 Buy. Card effects that say “gain” add a card for free. Both put the new card in your discard pile for a later draw. W = Work.</p></div>
     ${state.allowedOps ? '<p class="restriction-note">Earth Political Shock: only the three highlighted Ops piles can be bought or gained this month. Owned Ops still work.</p>' : ''}
     <div class="supply-basics">${CARDS.filter(c => c.type === 'Work' || c.type === 'Cargo').map(c => supplyCard(c.id)).join('')}</div>
     <div class="supply-ops">${CARDS.filter(c => c.type === 'Ops').map(c => supplyCard(c.id)).join('')}</div></section>`;
@@ -175,14 +180,14 @@ function deckPanel() {
   return `<aside class="deck-panel panel" aria-label="Deck and voyage overview"><p class="eyebrow">WHAT WE CARRY</p><h2>${cards.length} cards. <span>${score.total} points.</span></h2>
     <div class="deck-counts">${(['Work', 'Ops', 'Cargo', 'Burden'] as const).map(type => `<div class="type-${type.toLowerCase()}"><strong>${cards.filter(c => cardById(c.id).type === type).length}</strong><span>${type}</span></div>`).join('')}</div>
     <p class="microcopy">${score.cargo} Cargo points + ${score.crises} crisis points.<br>Retired: ${state.retired.length}. Cargo scores its printed value.</p>
-    ${state.phase !== 'arrived' && nextMonth <= state.totalMonths ? `<div class="next-crisis"><p class="eyebrow">ON THE HORIZON / MONTH ${pad(nextMonth)}</p><h3>${h(nextCrisis.name)}</h3><p>Generate ${nextCrisis.requiredWork} Work${nextCrisis.requiredOps ? ` and play ${nextCrisis.requiredOps} Ops` : ''}.<br>Opening hand: ${nextCrisis.handSize} cards.</p><p class="microcopy">Scheduled targets are visible so you can build toward them.</p></div>` : ''}
-    <details class="inventory" ${inventoryOpen || state.phase === 'arrived' ? 'open' : ''}><summary>Inspect the whole deck</summary><div>${CARDS.filter(c => cards.some(instance => instance.id === c.id)).map(c => `<p><span>${h(c.name)}</span><b>${cards.filter(instance => instance.id === c.id).length}</b></p>`).join('')}</div></details>
+    ${state.phase !== 'arrived' && nextMonth <= state.totalMonths ? `<div class="next-crisis"><p class="eyebrow">ON THE HORIZON / MONTH ${pad(nextMonth)}</p><h3>${h(nextCrisis.name)}</h3><p>Generate ${nextCrisis.requiredWork} Work${nextCrisis.requiredOps ? ` and play ${nextCrisis.requiredOps} Ops cards` : ''}.<br>Opening hand: ${nextCrisis.handSize} cards.</p><p class="microcopy">Scheduled targets are visible so you can build toward them.</p></div>` : ''}
+    <details class="inventory" ${inventoryOpen || state.phase === 'arrived' ? 'open' : ''}><summary>Inspect the whole deck</summary><div>${CARDS.filter(c => cards.some(instance => instance.id === c.id)).map(c => `<details class="inventory-card"><summary><span>${h(c.name)}</span><b>×${cards.filter(instance => instance.id === c.id).length}</b></summary><p>${h(c.type)} · ${h(c.text)}</p></details>`).join('')}</div></details>
     <p class="deck-footnote">Callisto is the foothold.<br>Europa is the reason.</p></aside>`;
 }
 
 function counters() {
   if (!active()) return '';
-  return `<section class="turn-counters" aria-label="Turn resources">${[['Ops remaining', state.ops], ['Work to spend', state.work], ['Buys remaining', state.buys], ['Work generated', state.workGenerated]].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</section>`;
+  return `<section class="turn-counters" aria-label="Turn resources">${[['Ops plays left', state.ops], ['Work to spend', state.work], ['Buys remaining', state.buys], ['Work generated', state.workGenerated]].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</section>`;
 }
 
 function purchaseDock() {

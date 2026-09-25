@@ -2,6 +2,7 @@ import type { CardDefinition, Crisis, VoyageEvent } from './types.ts';
 
 export const DEFAULT_MONTHS = 12;
 export const CRISIS_POINTS = 3;
+const BURDEN_TEXT = 'Cannot be played. Occupies a hand slot when drawn and has no effect. Worth 0 points.';
 
 // Supply piles represent capabilities and stores prepared aboard the ship, not resupply.
 export const CARDS: CardDefinition[] = [
@@ -43,87 +44,87 @@ export const CARDS: CardDefinition[] = [
   },
   {
     id: 'streamlining', name: 'Streamlining', type: 'Ops', cost: 2, supply: 10,
-    text: 'Retire up to 4 cards from your hand.',
+    text: 'Permanently retire up to 4 cards from your hand.',
     flavor: 'Close stale work orders and stop carrying procedures nobody needs.',
     effect: { special: 'retire' },
   },
   {
     id: 'crew-sync', name: 'Crew Sync', type: 'Ops', cost: 3, supply: 10,
-    text: '+1 card. +2 Ops.',
+    text: 'Draw 1 card. +2 Ops plays.',
     flavor: 'A useful handover leaves the next shift ready to act.',
     effect: { draw: 1, ops: 2 },
   },
   {
     id: 'integrated-diagnostics', name: 'Integrated Diagnostics', type: 'Ops', cost: 4, supply: 10,
-    text: '+3 cards.',
+    text: 'Draw 3 cards.',
     flavor: 'Compare the instruments before deciding which one to trust.',
     effect: { draw: 3 },
   },
   {
     id: 'salvage', name: 'Salvage', type: 'Ops', cost: 4, supply: 10,
-    text: '+1 Work. You may retire 1 card from your hand. If it is Cargo, gain +2 additional Work.',
+    text: '+1 Work. You may permanently retire 1 card from your hand. If it is Cargo, gain 2 additional Work.',
     flavor: 'A prepared surface kit can solve a shipboard problem, if you are willing to unpack it.',
     effect: { work: 1, special: 'salvage' },
   },
   {
     id: 'cross-training', name: 'Cross-Training', type: 'Ops', cost: 5, supply: 10,
-    text: '+2 cards. +1 Ops.',
+    text: 'Draw 2 cards. +1 Ops play.',
     flavor: 'Thirty people cannot cover every specialty. They can learn to cover one another.',
     effect: { draw: 2, ops: 1 },
   },
   {
     id: 'parallel-programs', name: 'Parallel Programs', type: 'Ops', cost: 5, supply: 10,
-    text: '+1 card. +1 Ops. +1 Work. +1 Buy.',
+    text: 'Draw 1 card. +1 Ops play. +1 Work. +1 Buy.',
     flavor: 'Prepare the next procedure while another team finishes the current one.',
     effect: { draw: 1, ops: 1, work: 1, buys: 1 },
   },
   {
     id: 'rapid-prototyping', name: 'Rapid Prototyping', type: 'Ops', cost: 3, supply: 10,
-    text: 'Gain an Ops card costing up to 4 Work.',
+    text: 'Gain an Ops card costing up to 4 Work into your discard pile, without spending Work or a Buy.',
     flavor: 'Turn a bench test into a procedure the whole crew can use.',
     effect: { special: 'gain-ops' },
   },
   {
     id: 'load-balancing', name: 'Load Balancing', type: 'Ops', cost: 2, supply: 10,
-    text: '+1 Ops. Discard any number of cards from your hand, then draw that many.',
+    text: '+1 Ops play. Discard any number of cards from your hand, then draw that many.',
     flavor: 'Move the jobs that can wait and find the people ready for what cannot.',
     effect: { ops: 1, special: 'discard-redraw' },
   },
   {
     id: 'systems-integration', name: 'Systems Integration', type: 'Ops', cost: 4, supply: 10,
-    text: 'Retire 1 card from your hand. Gain a card costing up to 2 Work more.',
+    text: 'Permanently retire 1 card from your hand. Gain a card costing up to 2 Work more than the retired card into your discard pile, without spending Work or a Buy.',
     flavor: 'Rebuild an existing capability around what the expedition has learned.',
     effect: { special: 'upgrade' },
   },
   {
     id: 'predictive-maintenance', name: 'Predictive Maintenance', type: 'Ops', cost: 5, supply: 10,
-    text: '+1 card. +1 Ops. Inspect the top 2 cards: retire, discard, or return each in any order.',
+    text: 'Draw 1 card. +1 Ops play. Inspect the top 2 cards of your deck. Retire cards permanently, discard cards for later, or return them to the top in any order.',
     flavor: 'A trend in the maintenance log is cheaper to act on than a failed bearing.',
     effect: { draw: 1, ops: 1, special: 'inspect' },
   },
   {
     id: 'fatigue', name: 'Fatigue', type: 'Burden', cost: 0, supply: 0,
-    text: 'No effect.',
+    text: BURDEN_TEXT,
     flavor: 'The long shift ended. Its cost is still aboard.',
   },
   {
     id: 'repair-backlog', name: 'Repair Backlog', type: 'Burden', cost: 0, supply: 0,
-    text: 'No effect.',
+    text: BURDEN_TEXT,
     flavor: 'Another yellow tag, waiting for the right hands and enough time.',
   },
   {
     id: 'exposure-monitoring', name: 'Exposure Monitoring', type: 'Burden', cost: 0, supply: 0,
-    text: 'No effect.',
+    text: BURDEN_TEXT,
     flavor: 'Extra dosimeter checks become part of the daily routine.',
   },
   {
     id: 'crew-conflict', name: 'Crew Conflict', type: 'Burden', cost: 0, supply: 0,
-    text: 'No effect.',
+    text: BURDEN_TEXT,
     flavor: 'An unresolved argument follows its participants from shift to shift.',
   },
   {
     id: 'medical-followup', name: 'Medical Follow-Up', type: 'Burden', cost: 0, supply: 0,
-    text: 'No effect.',
+    text: BURDEN_TEXT,
     flavor: 'Recovery is going well. It still needs somebody’s attention.',
   },
 ];
