@@ -81,7 +81,7 @@ test('the catalogue contains the ten defined Ops and the four escalating crises'
     { id: 'industrial-core', cost: 8, points: 6, supply: 8 },
   ]);
   assert.deepEqual(CRISES.map(({ handSize, requiredOps, requiredWork }) =>
-    [handSize, requiredOps, requiredWork]), [[5, 0, 4], [5, 0, 6], [4, 2, 5], [5, 2, 7]]);
+    [handSize, requiredOps, requiredWork]), [[5, 0, 3], [6, 0, 5], [6, 1, 4], [7, 1, 6]]);
   for (const event of EVENTS) {
     if (event.effect.kind === 'discard-or-burden') assert.equal(cardById(event.effect.burden).type, 'Burden');
   }
@@ -436,22 +436,22 @@ test('a crisis counts generated Work after purchases and is attempted only once'
   const crisis = CRISES[0];
   const state = turn([], [], [], {
     month: 3, phase: 'buy', encounter: { kind: 'crisis', id: crisis.id },
-    work: 4, workGenerated: 4,
+    work: 3, workGenerated: 3,
   });
   assert.equal(getCurrentCrisis(state)?.id, crisis.id);
-  const spent = buyCard(state, 'integrated-diagnostics');
+  const spent = buyCard(state, 'crew-sync');
   assert.equal(spent.work, 0);
   const completed = endMonth(spent);
   assert.equal(completed.crisisResults.length, 1);
   assert.equal(completed.crisisResults[0].success, true);
-  assert.equal(completed.crisisResults[0].work, 4);
+  assert.equal(completed.crisisResults[0].work, 3);
   assert.equal(getScore(completed).crises, 3);
   assert.equal(endMonth(completed), completed);
 });
 
 test('failing either crisis threshold gains exactly one Burden', () => {
   const crisis = CRISES[2];
-  for (const [opsPlayed, workGenerated] of [[1, 5], [2, 4]]) {
+  for (const [opsPlayed, workGenerated] of [[0, 4], [1, 3]]) {
     const state = turn([], [], [], {
       month: 9, phase: 'buy', encounter: { kind: 'crisis', id: crisis.id }, opsPlayed, workGenerated,
     });

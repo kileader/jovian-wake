@@ -83,10 +83,10 @@ A crisis occurs every third month. The first twelve months use this fixed sequen
 
 | Month | Crisis | Starting hand | Ops cards played | Work generated |
 | --- | --- | ---: | ---: | ---: |
-| 3 | Coolant Deviation | 5 | 0 | 4 |
-| 6 | Power Bus Redundancy | 5 | 0 | 6 |
-| 9 | Cooling Loop Failure | 4 | 2 | 5 |
-| 12 | Arrival Integration Test | 5 | 2 | 7 |
+| 3 | Coolant Deviation | 5 | 0 | 3 |
+| 6 | Power Bus Redundancy | 6 | 0 | 5 |
+| 9 | Cooling Loop Failure | 6 | 1 | 4 |
+| 12 | Arrival Integration Test | 7 | 1 | 6 |
 
 The 24-month mode repeats the pattern in months 15, 18, 21, and 24. Each scheduled crisis gets **one attempt**. Failure adds one fitting Burden; the failed crisis does not linger or retry in intervening months. The voyage continues.
 
