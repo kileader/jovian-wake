@@ -1,7 +1,8 @@
 export type CardType = 'Work' | 'Ops' | 'Cargo' | 'Burden';
+export type CargoFamily = 'habitat' | 'industry' | 'science';
 export type CardId =
   | 'crew-shift' | 'specialist-shift' | 'expert-shift' | 'colony-stores'
-  | 'habitation-modules' | 'industrial-core'
+  | 'habitation-modules' | 'industrial-core' | 'europa-instruments'
   | 'streamlining' | 'crew-sync' | 'integrated-diagnostics' | 'salvage'
   | 'cross-training' | 'parallel-programs' | 'rapid-prototyping'
   | 'load-balancing' | 'systems-integration' | 'predictive-maintenance'
@@ -12,10 +13,10 @@ export interface CardDefinition {
   name: string;
   type: CardType;
   cost: number;
-  supply: number;
   text: string;
   flavor: string;
   points?: number;
+  cargoFamily?: CargoFamily;
   effect?: {
     draw?: number;
     ops?: number;
@@ -30,6 +31,7 @@ export interface CardInstance { uid: number; id: CardId }
 export type EventEffect =
   | { kind: 'discard-or-burden'; count: number; cardType?: CardType; burden: CardId }
   | { kind: 'restricted-ops'; available: number }
+  | { kind: 'gain-burden'; burden: CardId }
   | { kind: 'short-hand'; cards: number };
 
 export interface VoyageEvent {
@@ -44,12 +46,13 @@ export interface Crisis {
   id: string;
   name: string;
   description: string;
-  handSize: number;
-  requiredOps: number;
-  requiredWork: number;
+  workCost: number;
+  workText: string;
+  cargoFamily: CargoFamily;
+  cargoText: string;
   burden: CardId;
-  successText: string;
-  failureText: string;
+  burdenCount: number;
+  deferText: string;
 }
 
 export type Encounter = { kind: 'cruise' } | { kind: 'event' | 'crisis'; id: string };
@@ -75,9 +78,10 @@ export interface LogEntry {
 export interface CrisisResult {
   month: number;
   id: string;
-  success: boolean;
-  work: number;
-  ops: number;
+  response: 'work' | 'cargo' | 'defer';
+  workSpent: number;
+  cargoSpent: CardId | null;
+  burdensAdded: number;
 }
 
 export interface GameState {
@@ -86,13 +90,12 @@ export interface GameState {
   nextUid: number;
   month: number;
   totalMonths: number;
-  phase: 'briefing' | 'event' | 'ops' | 'work' | 'buy' | 'report' | 'arrived';
+  phase: 'briefing' | 'event' | 'ops' | 'work' | 'crisis' | 'buy' | 'report' | 'arrived';
   deck: CardInstance[];
   hand: CardInstance[];
   discard: CardInstance[];
   inPlay: CardInstance[];
   retired: CardInstance[];
-  supply: Partial<Record<CardId, number>>;
   ops: number;
   buys: number;
   work: number;

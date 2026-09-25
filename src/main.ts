@@ -1,11 +1,11 @@
 import './style.css';
-import { CARDS, CRISES, CRISIS_POINTS } from './content.ts';
+import { CARDS, CARGO_FAMILIES, CRISES } from './content.ts';
 import {
   advancePhase, beginMonth, buyCard, canAcquire, canBuyCard, canPlayCard, cardById,
-  createGame, endMonth, getCurrentCrisis, getCurrentEvent, getScore, ownedCards,
-  playAllWork, playCard, resolveChoice, respondToEvent,
+  createGame, endMonth, getCurrentCrisis, getCurrentEvent, getManifest, getScore, ownedCards,
+  playAllWork, playCard, resolveChoice, resolveCrisis, respondToEvent,
 } from './engine.ts';
-import type { CardId, CardInstance, GameState } from './types.ts';
+import type { CardId, CardInstance, Crisis, CrisisResult, GameState } from './types.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const params = new URLSearchParams(location.search);
@@ -17,7 +17,7 @@ let logOpen = false;
 let inventoryOpen = false;
 const h = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const pad = (n: number) => String(n).padStart(2, '0');
-const active = () => ['event', 'ops', 'work', 'buy'].includes(state.phase);
+const active = () => ['event', 'ops', 'work', 'crisis', 'buy'].includes(state.phase);
 const randomSeed = () => `CALLISTO-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase()}`;
 const arrow = '<span aria-hidden="true">↗</span>';
 
@@ -37,8 +37,8 @@ function briefing() {
     <p class="dispatch-body">Life beneath Europa’s ice. A foothold on Callisto. Thirty people carrying everything they need across the dark. Build the crew’s routines and decide what arrives with you.</p>
     <ol class="briefing-steps">
       <li><span>01</span><div><strong>Draw five. Start with 1 Ops play and 1 Buy.</strong><p>Play Ops for effects, then Work to prepare new cards. Acquired cards go to your discard pile and return after a shuffle.</p></div></li>
-      <li><span>02</span><div><strong>Cruise → Event → Crisis. Repeat.</strong><p>Every third month tests your deck. Meet the displayed target for +${CRISIS_POINTS} points; otherwise gain one Burden and continue.</p></div></li>
-      <li><span>03</span><div><strong>Bring something worth keeping.</strong><p>Cargo scores its printed points at arrival. Build enough Work to prepare more valuable Cargo, or retire it to improve your draws and forfeit those points. Burdens just take up space.</p></div></li>
+      <li><span>02</span><div><strong>Cruise → Event → Crisis. Repeat.</strong><p>Every third month brings a decision. After playing your hand, spend Work, consume matching Cargo, or take Burdens. Then buy cards with what remains.</p></div></li>
+      <li><span>03</span><div><strong>Bring something worth keeping.</strong><p>Habitat, Industry, and Science Cargo solve different crises, but using a kit forfeits its arrival points. Unresolved Burdens clog your draws and cost 1 point each at arrival.</p></div></li>
     </ol>
     <div class="launch-controls"><label class="seed-label" for="launch-seed">VOYAGE SEED<input id="launch-seed" maxlength="80" value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label>
     <label class="seed-label" for="launch-months">LENGTH<select id="launch-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months · quick test</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months · longer build</option></select></label>
@@ -46,10 +46,32 @@ function briefing() {
     <p class="microcopy">Starting deck: 7 Crew Shift, 3 Colony Stores. No timer. Reloading resets the voyage.</p>`;
 }
 
-function crisisTargets() {
+function crisisTerms(crisis: Crisis) {
+  const family = CARGO_FAMILIES.find(f => f.id === crisis.cargoFamily)!.name;
+  return `${crisis.workCost} Work, 1 ${family} Cargo, or ${crisis.burdenCount} ${cardById(crisis.burden).name} cards.`;
+}
+
+function responseSummary(result: CrisisResult) {
+  return result.response === 'work' ? `Spent ${result.workSpent} Work`
+    : result.response === 'cargo' ? `Used ${cardById(result.cargoSpent!).name}`
+    : `Deferred · +${result.burdensAdded} ${cardById(CRISES.find(c => c.id === result.id)!.burden).name}`;
+}
+
+function crisisDecision() {
   const crisis = getCurrentCrisis(state);
   if (!crisis) return '';
-  return `<div class="crisis-targets" aria-label="Crisis targets"><span class="${state.workGenerated >= crisis.requiredWork ? 'met' : ''}">Work generated <b>${state.workGenerated} / ${crisis.requiredWork}</b></span>${crisis.requiredOps ? `<span class="${state.opsPlayed >= crisis.requiredOps ? 'met' : ''}">Ops cards played <b>${state.opsPlayed} / ${crisis.requiredOps}</b></span>` : ''}</div><p class="microcopy">${crisis.requiredOps ? 'Both targets' : 'The target'} must be met when the month ends. Spent Work still counts. Success +${CRISIS_POINTS} points; failure adds one ${h(cardById(crisis.burden).name)} and the voyage continues.</p>${burdenPreview(crisis.burden)}`;
+  const result = state.crisisResults.find(r => r.month === state.month);
+  if (result) return `<p class="event-rule">${h(responseSummary(result))}. Use the remaining Work for acquisitions.</p>`;
+  const family = CARGO_FAMILIES.find(f => f.id === crisis.cargoFamily)!.name;
+  if (state.phase !== 'crisis') return `<p class="event-rule">After playing Ops and Work, choose: ${h(crisisTerms(crisis))}</p><p class="microcopy">Work spent here cannot buy cards. Consumed Cargo loses its arrival points. Each unresolved Burden costs 1 point at arrival.</p>`;
+  const cargo = CARDS.filter(c => c.cargoFamily === crisis.cargoFamily && ownedCards(state).some(held => held.id === c.id));
+  const choosing = state.phase === 'crisis' && !state.pending;
+  return `<section class="crisis-decision" aria-label="Crisis responses"><p class="microcopy">${choosing ? 'Choose a response before acquiring cards. These costs are paid once, now.' : 'Play Ops and Work first, then choose a response before acquisitions. All crises start with a normal five-card hand.'}</p>
+    <div class="crisis-options">
+      <div><h3>Use crew time</h3><p>${h(crisis.workText)}</p><p class="microcopy">${state.work >= crisis.workCost ? `Leaves ${state.work - crisis.workCost} Work for acquisitions.` : `Needs ${crisis.workCost} Work; you currently have ${state.work}.`} Uses no Buy.</p><button class="secondary" data-action="crisis-work" ${!choosing || state.work < crisis.workCost ? 'disabled' : ''}>Spend ${crisis.workCost} Work</button></div>
+      <div><h3>Use ${family} Cargo</h3><p>${h(crisis.cargoText)}</p><label class="cargo-selector" for="crisis-cargo">Kit to consume<select id="crisis-cargo" ${!choosing || !cargo.length ? 'disabled' : ''}>${cargo.length ? cargo.map(c => `<option value="${c.id}">${h(c.name)} · lose ${c.points} ${c.points === 1 ? 'point' : 'points'}</option>`).join('') : '<option>No matching Cargo aboard</option>'}</select></label><button class="secondary" data-action="crisis-cargo" ${!choosing || !cargo.length ? 'disabled' : ''}>Consume 1 ${family} Cargo</button></div>
+      <div><h3>Carry the consequences</h3><p>${h(crisis.deferText)}</p><p class="microcopy">Keep all Work and Cargo. Add ${crisis.burdenCount} Burdens to discard; they cost ${crisis.burdenCount} arrival points if still aboard.</p><button class="secondary" data-action="crisis-defer" ${!choosing ? 'disabled' : ''}>Take ${crisis.burdenCount} ${h(cardById(crisis.burden).name)}</button></div>
+    </div><p class="microcopy">Consuming Cargo permanently retires it and its points. You may use any owned matching kit: hand first, then discard, then draw pile. No Work, Ops play, or Buy is spent.</p></section>${burdenPreview(crisis.burden)}`;
 }
 
 function burdenPreview(id: CardId) {
@@ -64,7 +86,8 @@ function turnPanel() {
     <h2 id="dispatch-title" tabindex="-1">${h(crisis?.name || event?.name || 'Room to work.')}</h2>
     <p class="dispatch-body">${h(crisis?.description || event?.description || 'No new fault has the crew’s attention. Use this month to strengthen the routines you will need later.')}</p>
     ${event ? `<p class="event-rule">${h(event.rule)}</p>` : ''}
-    ${crisisTargets()}
+    ${event?.effect.kind === 'gain-burden' ? burdenPreview(event.effect.burden) : ''}
+    ${crisisDecision()}
     ${state.phase === 'event' && event?.effect.kind === 'discard-or-burden' ? eventDecision(event.effect) : ''}
     ${phaseControls()}`;
 }
@@ -76,25 +99,26 @@ function eventDecision(effect: { count: number; cardType?: string; burden: CardI
 
 function phaseControls() {
   const phase = state.phase;
-  return `<nav class="phase-strip" aria-label="Monthly sequence">${[['ops', '1 · Ops'], ['work', '2 · Work'], ['buy', '3 · Acquire']].map(([key, label]) => `<span ${key === phase ? 'aria-current="step"' : ''}>${label}</span>`).join('<i aria-hidden="true">→</i>')}</nav>
+  return `<nav class="phase-strip" aria-label="Monthly sequence">${[['ops', '1 · Ops'], ['work', '2 · Work'], ...(getCurrentCrisis(state) ? [['crisis', '3 · Respond'], ['buy', '4 · Acquire']] : [['buy', '3 · Acquire']])].map(([key, label]) => `<span ${key === phase ? 'aria-current="step"' : ''}>${label}</span>`).join('<i aria-hidden="true">→</i>')}</nav>
     <div class="turn-actions">
     ${phase === 'ops' ? `<p>${state.ops ? state.hand.some(c => cardById(c.id).type === 'Ops') ? `${state.ops} Ops plays remaining. Each Ops card spends one play, then applies its effects.` : 'No Ops cards in hand. Play Work to acquire new cards.' : 'No Ops plays remaining. Move on to Work.'} Playing Work ends the Ops phase.</p><button class="primary" data-action="work" ${state.pending ? 'disabled' : ''}>${state.ops && state.hand.some(c => cardById(c.id).type === 'Ops') ? 'Finish Ops & play Work' : 'Play Work'} ${arrow}</button>` : ''}
-    ${phase === 'work' ? `<p>Play your Work cards, then acquire cards.</p><button class="primary" data-action="all-work" ${state.pending ? 'disabled' : ''}>Play all Work & acquire ${arrow}</button>` : ''}
-    ${phase === 'buy' ? `<p>${state.buys ? `Choose a supply pile below. ${state.buys} ${state.buys === 1 ? 'Buy' : 'Buys'} remaining.` : 'No Buys remaining. This month is ready to close.'} Ending the month discards your hand and played cards; unused Work, Ops plays, and Buys expire.</p><button class="primary" data-action="end" ${state.pending ? 'disabled' : ''}>End month ${pad(state.month)} ${arrow}</button>` : ''}
+    ${phase === 'work' ? `<p>Play your Work cards, then ${getCurrentCrisis(state) ? 'respond to the crisis' : 'acquire cards'}.</p><button class="primary" data-action="all-work" ${state.pending ? 'disabled' : ''}>Play all Work & ${getCurrentCrisis(state) ? 'respond' : 'acquire'} ${arrow}</button>` : ''}
+    ${phase === 'buy' ? `<p>${state.buys ? `Choose a card below. ${state.buys} ${state.buys === 1 ? 'Buy' : 'Buys'} remaining.` : 'No Buys remaining. This month is ready to close.'} Ending the month discards your hand and played cards; unused Work, Ops plays, and Buys expire.</p><button class="primary" data-action="end" ${state.pending ? 'disabled' : ''}>End month ${pad(state.month)} ${arrow}</button>` : ''}
+    ${phase === 'crisis' ? '<p>Choose one of the responses above. Work spent on the problem is unavailable for acquisitions.</p>' : ''}
     ${phase === 'event' ? '<p>Resolve the event before playing your hand.</p>' : ''}</div>${mobileHorizon()}`;
 }
 
 function mobileHorizon() {
   const nextMonth = (Math.floor(state.month / 3) + 1) * 3;
   const crisis = CRISES[(nextMonth / 3 - 1) % CRISES.length];
-  return nextMonth <= state.totalMonths ? `<p class="mobile-horizon">Next crisis · M${pad(nextMonth)}: ${h(crisis.name)}. ${crisis.requiredWork} Work${crisis.requiredOps ? ` + ${crisis.requiredOps} Ops cards played` : ''}; opening hand ${crisis.handSize}.</p>` : '';
+  return nextMonth <= state.totalMonths ? `<p class="mobile-horizon">Next crisis · M${pad(nextMonth)}: ${h(crisis.name)}. ${h(crisisTerms(crisis))}</p>` : '';
 }
 
 function report() {
   const result = state.crisisResults.find(r => r.month === state.month);
-  const entries = state.log.filter(e => e.month === state.month && ['purchase', 'retirement', 'crisis'].includes(e.kind));
-  return `<p class="eyebrow">MONTH ${pad(state.month)} / LOG RECORDED</p><h2 id="dispatch-title" tabindex="-1">${result ? result.success ? 'The system holds.' : 'A workaround will have to do.' : 'A month behind us.'}</h2>
-    <p class="dispatch-body">${result ? result.success ? `Crisis cleared. +${CRISIS_POINTS} arrival points.` : 'One Burden joins the deck. The crew contains the fault; the crossing continues.' : 'The hand is discarded. Work and unused Ops do not carry forward.'}</p>
+  const entries = state.log.filter(e => e.month === state.month && ['purchase', 'retirement', 'crisis', 'event'].includes(e.kind));
+  return `<p class="eyebrow">MONTH ${pad(state.month)} / LOG RECORDED</p><h2 id="dispatch-title" tabindex="-1">${result ? result.response !== 'defer' ? 'The work is done.' : 'A workaround will have to do.' : 'A month behind us.'}</h2>
+    <p class="dispatch-body">${result ? h(responseSummary(result)) + '. The crossing continues.' : 'The hand is discarded. Work and unused Ops do not carry forward.'}</p>
     <div class="report-entries">${entries.length ? entries.map(e => `<p><strong>${h(e.title)}</strong><br>${h(e.text)}</p>`).join('') : '<p>No cards acquired or retired this month.</p>'}</div>
     <div class="continue-row"><p>${nextEncounterText()}</p><button class="primary" data-action="begin">Continue to month ${pad(state.month + 1)} ${arrow}</button></div>`;
 }
@@ -105,15 +129,18 @@ function nextEncounterText() {
 
 function arrival() {
   const score = getScore(state);
-  const burdens = ownedCards(state).filter(c => cardById(c.id).type === 'Burden').length;
-  const cargoCount = ownedCards(state).filter(c => cardById(c.id).type === 'Cargo').length;
-  return `<p class="eyebrow">MONTH ${state.totalMonths} / ARRIVAL ASSESSMENT</p><h2 id="dispatch-title" tabindex="-1">You brought them this far.</h2>
-    <p class="dispatch-body">Callisto fills the forward cameras. The crossing ends here. The routines you built, the stores you protected, and the work you deferred have all arrived with you.</p>
-    <div class="arrival-score"><strong>${score.total}</strong><div><span class="eyebrow">ARRIVAL POINTS</span><p>${score.cargo} Cargo + ${score.crises} from crises</p></div></div>
-    <div class="arrival-assessment"><div><h3>${state.crisisResults.filter(r => r.success).length} / ${state.crisisResults.length} crises cleared</h3><p>${burdens} Burden${burdens === 1 ? '' : 's'} remain in the deck.</p></div><div><h3>${cargoCount} Cargo ${cargoCount === 1 ? 'card' : 'cards'} · ${score.cargo} points</h3><p>${state.retired.length} cards retired during the crossing. Retired Cargo no longer scores.</p></div></div>
-    <div class="crisis-history">${state.crisisResults.map(r => `<p><span>M${pad(r.month)}</span><strong>${h(CRISES.find(c => c.id === r.id)!.name)}</strong><span class="${r.success ? 'success-text' : ''}">${r.success ? `Cleared +${CRISIS_POINTS}` : 'Contained · +1 Burden'}</span></p>`).join('')}</div>
+  const manifest = getManifest(state);
+  const workSpent = state.crisisResults.reduce((sum, r) => sum + r.workSpent, 0);
+  const cargoUsed = manifest.reduce((sum, f) => sum + f.used, 0);
+  const obligations = CARDS.filter(c => c.type === 'Burden').map(c => ({ ...c, count: ownedCards(state).filter(held => held.id === c.id).length })).filter(c => c.count);
+  return `<p class="eyebrow">MONTH ${state.totalMonths} / ARRIVAL MANIFEST</p><h2 id="dispatch-title" tabindex="-1">You brought them this far.</h2>
+    <p class="dispatch-body">Callisto fills the forward cameras. The equipment you preserved and the obligations you carried now belong to the founding expedition.</p>
+    <div class="arrival-score"><strong>${score.total}</strong><div><span class="eyebrow">ARRIVAL POINTS</span><p>${score.cargo} Cargo points − ${score.burdens} unresolved Burdens. Crisis responses award no bonus points.</p></div></div>
+    <div class="cargo-manifest" aria-label="Cargo preserved for arrival">${manifest.map(f => `<article><p class="eyebrow">${h(f.name)}</p><h3>${f.count} ${f.count === 1 ? 'kit' : 'kits'} preserved</h3><p>${h(f.purpose)}</p><p class="microcopy">${f.points} points · ${f.used} consumed in crises · ${f.retired} retired in total</p></article>`).join('')}</div>
+    <div class="arrival-assessment"><div><h3>The cost of the crossing</h3><p>${workSpent} Work spent on problems. ${cargoUsed} Cargo ${cargoUsed === 1 ? 'kit' : 'kits'} consumed in response. ${state.retired.length} ${state.retired.length === 1 ? 'card' : 'cards'} retired overall.</p></div><div><h3>Unresolved obligations</h3><p>${obligations.length ? obligations.map(c => `${c.count} × ${h(c.name)}`).join('<br>') : 'No Burdens remain aboard.'}</p></div></div>
+    <div class="crisis-history">${state.crisisResults.map(r => `<p><span>M${pad(r.month)}</span><strong>${h(CRISES.find(c => c.id === r.id)!.name)}</strong><span>${h(responseSummary(r))}</span></p>`).join('')}</div>
     <div class="end-actions"><button class="primary" data-action="new">Chart another voyage ${arrow}</button><button class="text-button" data-action="replay">Replay this seed ↺</button></div>
-    <p class="microcopy">Prototype 0.2. Can a different deck beat this score? Settlement and Europa operations are beyond this voyage.</p>`;
+    <p class="microcopy">Prototype 0.3. This manifest records what arrived; colony and Europa operations are still a future phase.</p>`;
 }
 
 function pendingPanel() {
@@ -142,7 +169,7 @@ function handCard(card: CardInstance) {
   const picking = p?.kind === 'retire' || p?.kind === 'discard';
   const eligible = picking && (p.kind !== 'discard' || !p.requiredType || def.type === p.requiredType);
   const enabled = picking ? eligible && (selected.includes(card.uid) || selected.length < p.max) : canPlayCard(state, card.uid);
-  const label = picking ? selected.includes(card.uid) ? 'Selected' : eligible ? 'Select' : 'Ineligible' : enabled ? 'Play' : def.type === 'Cargo' ? `+${def.points} arrival ${def.points === 1 ? 'point' : 'points'}` : def.type === 'Burden' ? 'No effect' : 'In hand';
+  const label = picking ? selected.includes(card.uid) ? 'Selected' : eligible ? 'Select' : 'Ineligible' : enabled ? 'Play' : def.type === 'Cargo' ? `+${def.points} arrival ${def.points === 1 ? 'point' : 'points'}` : def.type === 'Burden' ? '−1 arrival point' : 'In hand';
   return `<button class="game-card type-${def.type.toLowerCase()} ${selected.includes(card.uid) ? 'selected' : ''}" data-card="${card.uid}" ${enabled ? '' : 'disabled'} ${picking ? `aria-pressed="${selected.includes(card.uid)}"` : ''} aria-label="${h(label)} ${h(def.name)}">
     <span class="card-top"><span>${def.type}</span><span>${def.cost} W</span></span><strong class="card-name">${h(def.name)}</strong><span class="card-rule">${h(def.text)}</span><span class="card-bottom">${label}</span></button>`;
 }
@@ -158,17 +185,20 @@ function supplyCard(id: CardId) {
   const c = cardById(id);
   const gaining = state.pending?.kind === 'gain' ? state.pending : null;
   const enabled = gaining ? canAcquire(state, id, gaining.maxCost, gaining.requiredType) : canBuyCard(state, id);
-  const count = state.supply[id] || 0;
   const restricted = c.type === 'Ops' && state.allowedOps && !state.allowedOps.includes(id);
-  const reason = !count ? 'Pile empty' : restricted ? 'Unavailable this month' : enabled ? gaining ? 'Gain card' : 'Acquire card' : `${count} remaining`;
-  return `<button class="supply-card type-${c.type.toLowerCase()} ${restricted ? 'restricted' : ''}" data-supply="${id}" ${enabled ? '' : 'disabled'} aria-label="${gaining ? 'Gain' : 'Acquire'} ${h(c.name)}, cost ${c.cost} Work, ${count} remaining"><span class="card-top"><span>${c.type}</span><b>${c.cost} W</b></span><strong class="card-name">${h(c.name)}</strong><span class="card-rule">${h(c.text)}</span><span class="card-flavor">${h(c.flavor)}</span><span class="card-bottom">${reason}${enabled ? ` · ${count} left` : ''}</span></button>`;
+  const reason = restricted ? 'Unavailable this month' : enabled ? gaining ? 'Gain card' : 'Acquire card' : gaining ? 'Outside gain limit' : state.phase !== 'buy' ? 'Acquire after playing your hand' : !state.buys ? 'No Buys remaining' : `Needs ${c.cost} Work`;
+  return `<button class="supply-card type-${c.type.toLowerCase()} ${restricted ? 'restricted' : ''}" data-supply="${id}" ${enabled ? '' : 'disabled'} aria-label="${gaining ? 'Gain' : 'Acquire'} ${h(c.name)}, cost ${c.cost} Work"><span class="card-top"><span>${c.type}</span><b>${c.cost} W</b></span><strong class="card-name">${h(c.name)}</strong><span class="card-rule">${h(c.text)}</span><span class="card-flavor">${h(c.flavor)}</span><span class="card-bottom">${reason}</span></button>`;
 }
 
 function supplyPanel() {
   if (state.phase === 'arrived') return '';
-  return `<section class="supply-section" aria-labelledby="supply-title"><div class="section-heading"><div><p class="eyebrow">FIXED SUPPLY</p><h2 id="supply-title">Prepare what comes next.</h2></div><p>Buying costs the printed Work amount plus 1 Buy. Card effects that say “gain” add a card for free. Both put the new card in your discard pile for a later draw. W = Work.</p></div>
+  return `<section class="supply-section" aria-labelledby="supply-title"><div class="section-heading"><div><p class="eyebrow">ONBOARD PREPARATIONS</p><h2 id="supply-title">Prepare what comes next.</h2></div><p>Buying costs the printed Work amount plus 1 Buy. Card effects that say “gain” add a card for free. Both put the new card in your discard pile for a later draw. Acquisitions have no supply caps. W = Work.</p></div>
     ${state.allowedOps ? '<p class="restriction-note">Earth Political Shock: only the three highlighted Ops piles can be bought or gained this month. Owned Ops still work.</p>' : ''}
-    <div class="supply-basics">${CARDS.filter(c => c.type === 'Work' || c.type === 'Cargo').map(c => supplyCard(c.id)).join('')}</div>
+    <h3 class="catalog-label">Work · effort for repairs and acquisitions</h3>
+    <div class="supply-basics">${CARDS.filter(c => c.type === 'Work').map(c => supplyCard(c.id)).join('')}</div>
+    <h3 class="catalog-label">Cargo · preserve for arrival or consume during a crisis</h3>
+    <div class="supply-cargo">${CARDS.filter(c => c.type === 'Cargo').map(c => supplyCard(c.id)).join('')}</div>
+    <h3 class="catalog-label">Ops · build your crew’s routines</h3>
     <div class="supply-ops">${CARDS.filter(c => c.type === 'Ops').map(c => supplyCard(c.id)).join('')}</div></section>`;
 }
 
@@ -179,15 +209,15 @@ function deckPanel() {
   const nextCrisis = CRISES[(Math.ceil(nextMonth / 3) - 1) % CRISES.length];
   return `<aside class="deck-panel panel" aria-label="Deck and voyage overview"><p class="eyebrow">WHAT WE CARRY</p><h2>${cards.length} cards. <span>${score.total} points.</span></h2>
     <div class="deck-counts">${(['Work', 'Ops', 'Cargo', 'Burden'] as const).map(type => `<div class="type-${type.toLowerCase()}"><strong>${cards.filter(c => cardById(c.id).type === type).length}</strong><span>${type}</span></div>`).join('')}</div>
-    <p class="microcopy">${score.cargo} Cargo points + ${score.crises} crisis points.<br>Retired: ${state.retired.length}. Cargo scores its printed value.</p>
-    ${state.phase !== 'arrived' && nextMonth <= state.totalMonths ? `<div class="next-crisis"><p class="eyebrow">ON THE HORIZON / MONTH ${pad(nextMonth)}</p><h3>${h(nextCrisis.name)}</h3><p>Generate ${nextCrisis.requiredWork} Work${nextCrisis.requiredOps ? ` and play ${nextCrisis.requiredOps} Ops cards` : ''}.<br>Opening hand: ${nextCrisis.handSize} cards.</p><p class="microcopy">Scheduled targets are visible so you can build toward them.</p></div>` : ''}
+    <p class="microcopy">${score.cargo} Cargo points − ${score.burdens} unresolved Burdens.<br>Retired: ${state.retired.length}. Cargo scores its printed value.</p>
+    ${state.phase !== 'arrived' && nextMonth <= state.totalMonths ? `<div class="next-crisis"><p class="eyebrow">ON THE HORIZON / MONTH ${pad(nextMonth)}</p><h3>${h(nextCrisis.name)}</h3><p>${h(crisisTerms(nextCrisis))}</p><p class="microcopy">Choose after playing Work, before acquiring cards. Consumed Cargo forfeits its points.</p></div>` : ''}
     <details class="inventory" ${inventoryOpen || state.phase === 'arrived' ? 'open' : ''}><summary>Inspect the whole deck</summary><div>${CARDS.filter(c => cards.some(instance => instance.id === c.id)).map(c => `<details class="inventory-card"><summary><span>${h(c.name)}</span><b>×${cards.filter(instance => instance.id === c.id).length}</b></summary><p>${h(c.type)} · ${h(c.text)}</p></details>`).join('')}</div></details>
     <p class="deck-footnote">Callisto is the foothold.<br>Europa is the reason.</p></aside>`;
 }
 
 function counters() {
   if (!active()) return '';
-  return `<section class="turn-counters" aria-label="Turn resources">${[['Ops plays left', state.ops], ['Work to spend', state.work], ['Buys remaining', state.buys], ['Work generated', state.workGenerated]].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</section>`;
+  return `<section class="turn-counters" aria-label="Turn resources">${[['Ops plays left', state.ops], ['Work to spend', state.work], ['Buys remaining', state.buys], ['Arrival points', getScore(state).total]].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</section>`;
 }
 
 function purchaseDock() {
@@ -199,14 +229,14 @@ function purchaseDock() {
 function render(focus = false) {
   const focused = document.activeElement as HTMLElement | null;
   const focusSelector = focused?.dataset.card ? `[data-card="${focused.dataset.card}"]` : focused?.dataset.supply ? `[data-supply="${focused.dataset.supply}"]` : focused?.dataset.inspect ? `[data-inspect="${focused.dataset.inspect}"]` : '';
-  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.2</small></span><div class="header-right"><span class="prototype-label">A CRUISE DECKBUILDER</span><button class="text-button" data-action="restart">New voyage ↗</button></div></header>
+  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.3</small></span><div class="header-right"><span class="prototype-label">A CRUISE DECKBUILDER</span><button class="text-button" data-action="restart">New voyage ↗</button></div></header>
     <main data-phase="${state.phase}" data-month="${state.month}"><div class="mission-nav"><span>EXPEDITION CONTROL</span><span class="seed-display">SEED / ${h(state.seed)}</span></div>${hero()}${counters()}
     <div class="game-layout deck-layout"><div class="main-column"><section class="dispatch panel" aria-labelledby="dispatch-title">${state.phase === 'briefing' ? briefing() : state.phase === 'report' ? report() : state.phase === 'arrived' ? arrival() : turnPanel()}</section>${handPanel()}</div>${deckPanel()}</div>
     <div class="sr-only" aria-live="polite">Month ${state.month}, ${state.phase} phase. ${state.ops} Ops, ${state.work} Work, ${state.buys} Buys.${state.pending ? ' A card choice is pending.' : ''} ${h(state.log.at(-1)?.title || '')}</div>
     ${supplyPanel()}
     <details class="voyage-log" ${logOpen ? 'open' : ''}><summary>VOYAGE LOG <span class="log-count">${state.log.length} ENTRIES</span></summary><div class="log-entries">${[...state.log].reverse().map(e => `<article><span class="log-month">M${pad(e.month)}</span><div><h3>${h(e.title)}</h3><p>${h(e.text)}</p></div></article>`).join('') || '<p>The voyage has yet to begin.</p>'}</div></details>
-    <details class="how-to"><summary>Rules & card types</summary><p><strong>Work</strong> generates this month’s purchasing power. <strong>Ops</strong> spends one Ops play and resolves its card text; extra Ops lets you chain cards. <strong>Cargo</strong> does nothing in hand and scores at arrival. <strong>Burden</strong> has no effect and clogs your draws.</p><p>Play Ops first, then Work, then acquire cards. You cannot return to an earlier phase. Gained cards go to discard. When the draw pile runs out, shuffle the discard pile. Cleanup discards the entire hand and all cards in play; leftover Work, Ops, and Buys expire.</p><p>Retirement permanently removes a card and forfeits its points. Every Cargo card still owned at arrival scores its printed value; cleared crises score ${CRISIS_POINTS} each. Score includes all owned piles. Every third month is one crisis attempt; failure adds one Burden and the voyage continues. Work already spent still counts toward its target. The 24-month mode repeats the four-crisis sequence.</p><p>The same seed, length, and choices reproduce a voyage. No saves across reloads. These are deliberately compressed gameplay timescales, not a trajectory simulation. No colony phase or ship upgrades yet.</p></details>
-    <footer><span>JOVIAN WAKE <b>/</b> PROTOTYPE 0.2</span><span>THE DISTANCE IS THE TEST.</span></footer></main>${purchaseDock()}
+    <details class="how-to"><summary>Rules & card types</summary><p><strong>Work</strong> generates this month’s purchasing power. <strong>Ops</strong> spends one Ops play and resolves its card text; extra Ops lets you chain cards. <strong>Cargo</strong> scores at arrival and can be permanently consumed for matching crisis responses. It has no normal play effect. <strong>Burden</strong> clogs your draws and costs 1 point at arrival if unresolved.</p><p>Play Ops first, then Work, respond to any crisis, then acquire cards. You cannot return to an earlier phase. Gained cards go to discard. When the draw pile runs out, shuffle the discard pile. Cleanup discards the entire hand and all cards in play; leftover Work, Ops, and Buys expire.</p><p>Retirement permanently removes a card and forfeits its points. Every owned Cargo card scores its printed value; each owned Burden subtracts 1 point. Score includes all owned piles. Every third month brings a choice: spend Work, permanently consume matching Cargo, or accept Burdens. Paying Work reduces what you can buy. Cargo can be taken from any owned pile, using a copy in hand first, then discard, then draw. The 24-month mode repeats the four-crisis sequence. Some events automatically add a Burden after the opening draw. Acquisitions have no supply caps; they represent preparations using equipment already aboard.</p><p>The same seed, length, and choices reproduce a voyage. No saves across reloads. These are deliberately compressed gameplay timescales, not a trajectory simulation. No colony phase or ship upgrades yet.</p></details>
+    <footer><span>JOVIAN WAKE <b>/</b> PROTOTYPE 0.3</span><span>THE DISTANCE IS THE TEST.</span></footer></main>${purchaseDock()}
     <dialog id="restart-dialog" aria-labelledby="restart-title"><form id="restart-form"><p class="eyebrow">A DIFFERENT CROSSING</p><h2 id="restart-title">Chart a new voyage.</h2><p>${state.month && state.phase !== 'arrived' ? 'This will end your current run. ' : ''}Use the same seed to replay the same starting conditions.</p><label class="seed-label" for="restart-seed">VOYAGE SEED<input id="restart-seed" maxlength="80" required value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label><label class="seed-label" for="restart-months">LENGTH<select id="restart-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months</option></select></label><div class="dialog-actions"><button type="button" class="text-button" data-action="random-seed">Generate seed ↺</button><div><button type="button" class="secondary" data-action="cancel-restart">Cancel</button><button type="submit" class="primary">Begin again ↗</button></div></div></form></dialog>`;
   app.querySelector<HTMLDetailsElement>('.voyage-log')!.addEventListener('toggle', e => { logOpen = (e.target as HTMLDetailsElement).open; });
   app.querySelector<HTMLDetailsElement>('.inventory')!.addEventListener('toggle', e => { inventoryOpen = (e.target as HTMLDetailsElement).open; });
@@ -265,8 +295,11 @@ app.addEventListener('click', e => {
       update(beginMonth(state), true);
       break;
     }
-    case 'work': update(advancePhase(playAllWork(advancePhase(state)))); break;
-    case 'all-work': update(advancePhase(playAllWork(state))); break;
+    case 'work': update(advancePhase(playAllWork(advancePhase(state))), !!getCurrentCrisis(state)); break;
+    case 'all-work': update(advancePhase(playAllWork(state)), !!getCurrentCrisis(state)); break;
+    case 'crisis-work': update(resolveCrisis(state, 'work'), true); break;
+    case 'crisis-defer': update(resolveCrisis(state, 'defer'), true); break;
+    case 'crisis-cargo': update(resolveCrisis(state, 'cargo', app.querySelector<HTMLSelectElement>('#crisis-cargo')!.value as CardId), true); break;
     case 'end': update(endMonth(state), true); break;
     case 'event-discard': update(respondToEvent(state, 'discard')); break;
     case 'event-burden': update(respondToEvent(state, 'burden')); break;

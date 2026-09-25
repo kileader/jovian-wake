@@ -1,4 +1,4 @@
-import { CARDS, CRISES, CRISIS_POINTS, DEFAULT_MONTHS, EVENTS } from './content.ts';
+import { CARDS, CARGO_FAMILIES, CRISES, DEFAULT_MONTHS, EVENTS } from './content.ts';
 import type { CardDefinition, CardId, CardInstance, CardType, ChoiceResolution, Crisis, GameState, LogEntry, PendingChoice, VoyageEvent } from './types.ts';
 
 // FNV-1a seeds Mulberry32. Only transitions consume randomness, never rendering.
@@ -29,7 +29,7 @@ function copy(state: GameState): GameState {
   return {
     ...state,
     deck: [...state.deck], hand: [...state.hand], discard: [...state.discard],
-    inPlay: [...state.inPlay], retired: [...state.retired], supply: { ...state.supply },
+    inPlay: [...state.inPlay], retired: [...state.retired],
     eventQueue: [...state.eventQueue], allowedOps: state.allowedOps && [...state.allowedOps],
     encounter: { ...state.encounter }, crisisResults: [...state.crisisResults], log: [...state.log],
     pending: state.pending?.kind === 'inspect'
@@ -57,7 +57,6 @@ export function createGame(seed: string, totalMonths = DEFAULT_MONTHS): GameStat
     seed, rng: hashSeed(seed), nextUid: 1, month: 0,
     totalMonths: Number.isInteger(totalMonths) && totalMonths > 0 && totalMonths % 3 === 0 ? totalMonths : DEFAULT_MONTHS,
     phase: 'briefing', deck: [], hand: [], discard: [], inPlay: [], retired: [],
-    supply: Object.fromEntries(CARDS.map((card) => [card.id, card.supply])),
     ops: 0, buys: 0, work: 0, workGenerated: 0, opsPlayed: 0, pending: null,
     encounter: { kind: 'cruise' }, eventQueue: [], allowedOps: null, crisisResults: [], log: [],
   };
@@ -82,10 +81,23 @@ export function ownedCards(state: GameState): CardInstance[] {
   return [...state.deck, ...state.hand, ...state.discard, ...state.inPlay, ...(state.pending?.kind === 'inspect' ? state.pending.cards : [])];
 }
 
-export function getScore(state: GameState): { cargo: number; crises: number; total: number } {
+export function getScore(state: GameState): { cargo: number; burdens: number; total: number } {
   const cargo = ownedCards(state).reduce((sum, card) => sum + (cardById(card.id).type === 'Cargo' ? cardById(card.id).points ?? 0 : 0), 0);
-  const crises = state.crisisResults.filter((result) => result.success).length * CRISIS_POINTS;
-  return { cargo, crises, total: cargo + crises };
+  const burdens = ownedCards(state).filter((card) => cardById(card.id).type === 'Burden').length;
+  return { cargo, burdens, total: cargo - burdens };
+}
+
+export function getManifest(state: GameState) {
+  const cards = ownedCards(state);
+  return CARGO_FAMILIES.map((family) => {
+    const preserved = cards.filter((card) => cardById(card.id).cargoFamily === family.id);
+    return {
+      ...family, count: preserved.length,
+      points: preserved.reduce((sum, card) => sum + (cardById(card.id).points ?? 0), 0),
+      retired: state.retired.filter((card) => cardById(card.id).cargoFamily === family.id).length,
+      used: state.crisisResults.filter((result) => result.cargoSpent && cardById(result.cargoSpent).cargoFamily === family.id).length,
+    };
+  });
 }
 
 // Taking cards never touches in-play cards. The top of the deck is index zero.
@@ -134,9 +146,8 @@ export function beginMonth(state: GameState): GameState {
   if (next.month % 3 === 0) {
     const crisis = CRISES[(next.month / 3 - 1) % CRISES.length];
     next.encounter = { kind: 'crisis', id: crisis.id };
-    handSize = crisis.handSize;
     title = crisis.name;
-    rule = `Generate ${crisis.requiredWork} Work and play ${crisis.requiredOps} Ops cards this month.`;
+    rule = `After playing Work, spend ${crisis.workCost} Work, consume 1 ${crisis.cargoFamily} Cargo, or take ${crisis.burdenCount} ${cardById(crisis.burden).name} cards. Then acquire cards.`;
   } else if (next.month % 3 === 2) {
     if (!next.eventQueue.length) next.eventQueue = shuffle(next, EVENTS.map((event) => event.id));
     const id = next.eventQueue.shift()!;
@@ -146,7 +157,7 @@ export function beginMonth(state: GameState): GameState {
     rule = event.rule;
     if (event.effect.kind === 'short-hand') handSize = event.effect.cards;
     if (event.effect.kind === 'restricted-ops') {
-      next.allowedOps = shuffle(next, CARDS.filter((card) => card.type === 'Ops' && (next.supply[card.id] ?? 0) > 0).map((card) => card.id)).slice(0, event.effect.available);
+      next.allowedOps = shuffle(next, CARDS.filter((card) => card.type === 'Ops').map((card) => card.id)).slice(0, event.effect.available);
     }
     if (event.effect.kind === 'discard-or-burden') next.phase = 'event';
   } else {
@@ -154,6 +165,11 @@ export function beginMonth(state: GameState): GameState {
   }
   const drawn = draw(next, handSize);
   log(next, 'turn', title, `${rule} Drew ${drawn} cards. Start with 1 Ops and 1 Buy.`);
+  const event = getCurrentEvent(next);
+  if (event?.effect.kind === 'gain-burden') {
+    gainBurden(next, event.effect.burden);
+    log(next, 'event', event.name, `Gained 1 ${cardById(event.effect.burden).name} in discard. It can be drawn after a reshuffle.`);
+  }
   return next;
 }
 
@@ -168,7 +184,7 @@ export function canPlayCard(state: GameState, uid: number): boolean {
 
 export function canAcquire(state: GameState, id: CardId, maxCost = Infinity, requiredType?: CardType): boolean {
   const card = CARDS.find((entry) => entry.id === id);
-  return !!card && card.type !== 'Burden' && (state.supply[id] ?? 0) > 0 && card.cost <= maxCost
+  return !!card && card.type !== 'Burden' && card.cost <= maxCost
     && (!requiredType || card.type === requiredType)
     && (card.type !== 'Ops' || state.allowedOps === null || state.allowedOps.includes(id));
 }
@@ -181,7 +197,7 @@ function offerGain(state: GameState, source: CardId, maxCost: number, requiredTy
   if (CARDS.some((card) => canAcquire(state, card.id, maxCost, requiredType))) {
     state.pending = { kind: 'gain', source, maxCost, ...(requiredType ? { requiredType } : {}) };
   } else {
-    log(state, 'card', cardById(source).name, 'No eligible supply pile remains. Continue without gaining a card.');
+    log(state, 'card', cardById(source).name, 'No eligible card is available this month. Continue without gaining a card.');
   }
 }
 
@@ -246,7 +262,43 @@ export function playAllWork(state: GameState): GameState {
 
 export function advancePhase(state: GameState): GameState {
   if (state.pending || (state.phase !== 'ops' && state.phase !== 'work')) return state;
-  return { ...state, phase: state.phase === 'ops' ? 'work' : 'buy' };
+  return { ...state, phase: state.phase === 'ops' ? 'work' : getCurrentCrisis(state) ? 'crisis' : 'buy' };
+}
+
+export function resolveCrisis(state: GameState, response: 'work' | 'cargo' | 'defer', cargoId?: CardId): GameState {
+  const crisis = getCurrentCrisis(state);
+  if (state.phase !== 'crisis' || state.pending || !crisis || state.crisisResults.some((result) => result.month === state.month)) return state;
+  if (response === 'work' && state.work < crisis.workCost) return state;
+  if (response === 'cargo' && (!cargoId || cardById(cargoId).cargoFamily !== crisis.cargoFamily || !ownedCards(state).some((card) => card.id === cargoId))) return state;
+  if (!['work', 'cargo', 'defer'].includes(response)) return state;
+  const next = copy(state);
+  let text = '';
+  if (response === 'work') {
+    next.work -= crisis.workCost;
+    text = `${crisis.workText} Spent ${crisis.workCost} Work; ${next.work} remains for acquisitions.`;
+  } else if (response === 'cargo') {
+    // Prefer an accessible copy; identical cards within a zone are interchangeable.
+    for (const zone of [next.hand, next.discard, next.deck, next.inPlay]) {
+      const index = zone.findIndex((card) => card.id === cargoId);
+      if (index < 0) continue;
+      next.retired.push(...zone.splice(index, 1));
+      break;
+    }
+    const cargo = cardById(cargoId!);
+    text = `${crisis.cargoText} Consumed 1 ${cargo.name}; it leaves the deck permanently and forfeits ${cargo.points} arrival points.`;
+  } else {
+    for (let index = 0; index < crisis.burdenCount; index++) gainBurden(next, crisis.burden);
+    text = `${crisis.deferText} Gained ${crisis.burdenCount} ${cardById(crisis.burden).name} cards in discard.`;
+  }
+  next.crisisResults.push({
+    month: next.month, id: crisis.id, response,
+    workSpent: response === 'work' ? crisis.workCost : 0,
+    cargoSpent: response === 'cargo' ? cargoId! : null,
+    burdensAdded: response === 'defer' ? crisis.burdenCount : 0,
+  });
+  next.phase = 'buy';
+  log(next, 'crisis', crisis.name, text);
+  return next;
 }
 
 export function buyCard(state: GameState, id: CardId): GameState {
@@ -255,7 +307,6 @@ export function buyCard(state: GameState, id: CardId): GameState {
   const card = cardById(id);
   next.work -= card.cost;
   next.buys--;
-  next.supply[id]!--;
   next.discard.push(instance(next, id));
   log(next, 'purchase', `Bought ${card.name}`, `Spent ${card.cost} Work and 1 Buy. The card goes to discard.`);
   return next;
@@ -298,7 +349,6 @@ export function resolveChoice(state: GameState, resolution: ChoiceResolution): G
     if (resolution.type !== 'gain' || !canAcquire(state, resolution.cardId, pending.maxCost, pending.requiredType)) return state;
     const next = copy(state);
     next.pending = null;
-    next.supply[resolution.cardId]!--;
     next.discard.push(instance(next, resolution.cardId));
     log(next, 'purchase', `Gained ${cardById(resolution.cardId).name}`, `${cardById(pending.source).name} added this card to discard without spending Work or a Buy.`);
     return next;
@@ -342,14 +392,8 @@ export function resolveChoice(state: GameState, resolution: ChoiceResolution): G
 
 export function endMonth(state: GameState): GameState {
   if (state.phase !== 'buy' || state.pending) return state;
+  if (getCurrentCrisis(state) && !state.crisisResults.some((result) => result.month === state.month)) return state;
   const next = copy(state);
-  const crisis = getCurrentCrisis(next);
-  if (crisis) {
-    const success = next.workGenerated >= crisis.requiredWork && next.opsPlayed >= crisis.requiredOps;
-    next.crisisResults.push({ month: next.month, id: crisis.id, success, work: next.workGenerated, ops: next.opsPlayed });
-    if (!success) gainBurden(next, crisis.burden);
-    log(next, 'crisis', `${success ? 'Resolved' : 'Failed'}: ${crisis.name}`, `${success ? crisis.successText : crisis.failureText} Generated ${next.workGenerated} Work; played ${next.opsPlayed} Ops cards.${success ? ` Earned ${CRISIS_POINTS} arrival points.` : ` Gained ${cardById(crisis.burden).name} in discard.`}`);
-  }
   next.discard.push(...next.hand, ...next.inPlay);
   next.hand = [];
   next.inPlay = [];

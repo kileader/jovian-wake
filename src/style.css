@@ -690,10 +690,15 @@ button:disabled { cursor: default; }
 .turn-actions p, .continue-row p { font-size: 12px; line-height: 1.7; color: var(--muted); }
 .event-rule { font-size: 13px; line-height: 1.7; padding-left: 12px; border-left: 2px solid var(--orange); }
 .event-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
-.crisis-targets { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
-.crisis-targets > span { padding: 12px; border: 1px solid #8f704c; background: var(--notice); font-size: 12px; }
-.crisis-targets b { margin-left: 12px; font: 19px var(--display); }
-.crisis-targets .met { background: #18352e; border-color: #547b68; color: #b6e0c6; }
+.crisis-options, .cargo-manifest { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0 22px; }
+.crisis-options > div, .cargo-manifest article { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); background: var(--field); min-width: 0; }
+.crisis-options h3, .cargo-manifest h3 { font: 24px var(--display); }
+.crisis-options p, .cargo-manifest p { font-size: 12px; line-height: 1.7; }
+.crisis-options button { margin-top: auto; width: 100%; white-space: normal; line-height: 1.6; padding: 12px; }
+.crisis-options .cargo-selector { display: flex; flex-direction: column; gap: 6px; font-size: 10px; color: var(--muted); }
+.cargo-selector select { width: 100%; font-size: 11px; }
+.cargo-manifest article { border-top: 3px solid #97bd96; }
+.cargo-manifest .eyebrow { font-size: 9px; }
 .deck-panel { padding: 24px; background: var(--raised); }
 .deck-panel h2 { font: 28px var(--display); margin: 9px 0 20px; }
 .deck-panel h2 span { color: #96c9e4; }
@@ -758,6 +763,8 @@ button:disabled { cursor: default; }
 .section-heading h2 { font: 32px var(--display); margin-top: 6px; }
 .section-heading > p { max-width: 370px; font-size: 11px; line-height: 1.8; color: var(--muted); }
 .supply-basics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.supply-cargo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.catalog-label { font: 11px/1.7 var(--mono); color: var(--muted); margin: 20px 0 12px; }
 .supply-ops { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .supply-card { min-height: 222px; }
 .supply-basics .supply-card { min-height: 165px; }
@@ -791,6 +798,8 @@ button:disabled { cursor: default; }
 main[data-phase="buy"] { padding-bottom: 100px; }
 @media (min-width: 1500px) { main { max-width: 1460px; } }
 @media (max-width: 1050px) {
+  .supply-cargo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crisis-options { grid-template-columns: 1fr; }
   main { padding: 0 24px; }
   .deck-layout { grid-template-columns: minmax(0, 2.4fr) minmax(220px, 1fr); }
   .supply-ops { grid-template-columns: repeat(3, 1fr); }
@@ -800,6 +809,7 @@ main[data-phase="buy"] { padding-bottom: 100px; }
   .hand-cards { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 }
 @media (max-width: 760px) {
+  .cargo-manifest { grid-template-columns: 1fr; }
   main { padding: 0 18px; }
   .site-header { height: 70px; padding: 0 18px; }
   .wordmark { font-size: 23px; gap: 4px; }
@@ -817,7 +827,7 @@ main[data-phase="buy"] { padding-bottom: 100px; }
   .deck-layout { grid-template-columns: 1fr; }
   .deck-panel { order: 2; }
   .mobile-horizon { display: block; border-top: 1px solid var(--line); margin-top: 16px; padding-top: 12px; font-size: 10px; line-height: 1.8; color: var(--muted); }
-  main[data-phase="event"] .deck-panel, main[data-phase="ops"] .deck-panel, main[data-phase="work"] .deck-panel, main[data-phase="buy"] .deck-panel { display: none; }
+  main[data-phase="event"] .deck-panel, main[data-phase="ops"] .deck-panel, main[data-phase="work"] .deck-panel, main[data-phase="buy"] .deck-panel, main[data-phase="crisis"] .deck-panel { display: none; }
   .dispatch { padding: 22px; }
   .dispatch h2 { font-size: 30px; }
   .dispatch-header { align-items: flex-start; }
@@ -834,7 +844,7 @@ main[data-phase="buy"] { padding-bottom: 100px; }
   .card-name { font-size: 23px; }
   .turn-actions, .continue-row { flex-direction: column; align-items: stretch; gap: 14px; }
   .turn-actions .primary, .continue-row .primary { justify-content: center; }
-  .phase-strip { gap: 10px; font-size: 10px; }
+  .phase-strip { gap: 8px; font-size: 9px; flex-wrap: wrap; }
   .launch-controls .primary { width: 100%; justify-content: center; }
   .arrival-assessment { grid-template-columns: 1fr; }
   .crisis-history p { flex-wrap: wrap; gap: 8px; }

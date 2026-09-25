@@ -1,10 +1,10 @@
-# Jovian Wake — Prototype 0.2
+# Jovian Wake — Prototype 0.3
 
-A small TypeScript browser game about carrying thirty people toward Jupiter. Humanity has discovered life on Europa; your one-way expedition is preparing for a foothold on Callisto.
+A small TypeScript browser deckbuilder about carrying thirty people toward Jupiter. Humanity has discovered life on Europa; your one-way expedition is preparing a foothold on Callisto.
 
-This version tests a **Dominion-inspired deckbuilding loop**: can acquiring capabilities, improving the deck, and carrying awkward but valuable cargo make the cruise worth replaying? Compare it with the automatic-project and event-choice loop preserved in [v0.1.0](https://github.com/kileader/jovian-wake/tree/v0.1.0).
+This version asks whether building satisfying card combinations becomes more interesting when expedition problems compete for the same resources. The slice ends at arrival. Colony gameplay and expedition preparation remain future phases.
 
-The slice ends at arrival. There is no colony gameplay, expedition preparation phase, permanent ship-upgrade system, or set of Ship/Crew/Supplies/Readiness meters. Training, fabrication, maintenance, and prepared stores are represented by cards. Acquiring a card means preparing something aboard the ship, not receiving a resupply from Earth.
+Cards represent trained routines and equipment prepared from what is already aboard. Buying a card does not mean resupply from Earth. The prototype abstracts material limits; acquisitions have no supply caps.
 
 ## Play locally
 
@@ -15,134 +15,122 @@ npm install
 npm run dev
 ```
 
-Open the address printed by Vite, normally [localhost:5173](http://127.0.0.1:5173/). Choose the default **12-month** voyage or a **24-month** comparison run. These are prototype turn counts, not a trajectory calculation.
+Open the URL printed by Vite, normally [localhost:5173](http://127.0.0.1:5173/). Choose a **12-month** voyage or a **24-month** comparison run. These are compressed turn counts, not trajectory calculations.
 
-The same seed, voyage length, and decisions reproduce a run. Enter a seed in the briefing or use a URL such as [localhost:5173/?seed=callisto&months=24](http://127.0.0.1:5173/?seed=callisto&months=24). The seed does not save progress: reloading starts over, and there is no autosave.
+The same seed, length, and choices reproduce a run. Enter a seed in the briefing or use `?seed=CALLISTO-01&months=24`. Reloading starts over; there is no autosave.
 
 ```sh
 npm test
+npm run simulate
 npm run build
 npm run preview
 ```
 
-`build` checks TypeScript and writes the static game to `dist/`. `preview` serves that build locally. Tests use Node’s built-in runner and TypeScript stripping, with in-process execution for restricted Windows environments. The game has no runtime framework or server.
+The build checks TypeScript and writes the static game to `dist/`. The game uses plain TypeScript, Vite, HTML, and CSS without a runtime framework or server.
 
-## How a month works
+## A month aboard
 
-The starting deck contains **7 Crew Shifts and 3 Colony Stores**. A normal hand has five cards. Each month begins with one Ops action and one Buy, with any event or crisis changing the situation for that turn.
+Start with **7 Crew Shifts and 3 Colony Stores**. Each month starts with a five-card hand, one Ops play, and one Buy. An event can modify the opening hand.
 
-Months follow a repeating **ordinary cruise → event → crisis** cadence. Event months draw from a seeded, shuffled set of five events: Sensor Drift, Earth Political Shock, Solar Particle Event, Micrometeoroid Strike, and Cabin Fever. The event set reshuffles when exhausted.
+Months repeat **ordinary cruise → event → crisis**:
 
-1. **Resolve the encounter.** An event can demand discards, add a Burden, restrict available Ops piles, or reduce the hand. A crisis sets requirements for this month.
-2. **Play Ops.** Each Ops card spends one Ops action. Cards can draw, grant more actions, improve the deck, or prepare additional Work and Buys. Choosing the order matters.
-3. **Play Work.** Work cards generate the effort available for acquisition. Once you leave the Ops phase, you cannot return to it that month.
-4. **Acquire cards.** Spend Work and Buys on available supply piles. A card effect that says “gain” uses its own limit instead of spending a Buy. Acquired cards go to the discard pile.
-5. **Resolve and clean up.** Assess the crisis, discard the remaining hand and played cards, and advance to the next month. Unspent Work, Ops, and Buys do not carry over.
+1. Resolve any opening event choice. Some events add a Burden automatically after the opening draw.
+2. Play Ops cards. Each costs an Ops play before applying its effects. Extra Ops lets you chain cards.
+3. Play Work cards. Once you leave Ops, you cannot return to it that month.
+4. On crisis months, choose a response: **spend Work, consume matching Cargo, or accept Burdens**.
+5. Spend the remaining Work and Buys acquiring cards. Acquisitions go to discard, and supplies do not run out.
+6. End the month. Discard the hand and played cards. Unspent Work, Ops, and Buys expire.
 
-When a draw exhausts the deck, the discard pile is shuffled into a new deck. Discarded cards can return; **retired cards leave the deck permanently**. Newly acquired cards usually help a later turn, once the deck reaches them.
+An exhausted draw pile reshuffles the discard pile. Discarding preserves a card for later; **retirement removes it permanently**, including its arrival value.
 
-## The four card types
+## Cards and Cargo families
 
-| Type | Purpose |
-| --- | --- |
-| **Work** | Crew Shift, Specialist Shift, and Expert Shift produce 1, 2, and 3 Work respectively. |
-| **Ops** | Procedures that draw cards, grant actions, generate effort, or change the deck. |
-| **Cargo** | Three tiers of prepared stores and equipment score their printed points at arrival. They have no play effect and occupy hand space. |
-| **Burden** | Fatigue, Repair Backlog, Exposure Monitoring, Crew Conflict, and Medical Follow-Up have no play effect or points. They enter through consequences and cannot be bought. |
+- **Work:** Crew Shift generates 1 Work; Specialist Shift costs 3 and generates 2; Expert Shift costs 6 and generates 3.
+- **Ops:** draws, extra plays, deck cleanup, upgrades, and extra acquisitions.
+- **Cargo:** occupies a hand slot with no normal play effect. Scores at arrival or can be consumed for a matching crisis response.
+- **Burden:** cannot be played, clogs draws, and subtracts **1 arrival point per unresolved card**. Retirement removes both costs.
 
-The Cargo piles offer more points per card as the deck becomes capable of more expensive acquisitions:
+| Cargo | Family | Cost | Arrival points | Voyage use |
+| --- | --- | ---: | ---: | --- |
+| Colony Stores | Habitat | 2 | 1 | Outfit a medical isolation area |
+| Habitation Modules | Habitat | 5 | 3 | Outfit a medical isolation area |
+| Industrial Core | Industry | 5 | 3 | Cannibalize repair or power-system components |
+| Europa Instruments | Science | 5 | 3 | Dedicate reference instruments to dosimetry |
 
-| Cargo card | Cost in Work | Arrival points | Supply |
-| --- | ---: | ---: | ---: |
-| Colony Stores | 2 | 1 | 12 |
-| Habitation Modules | 5 | 3 | 8 |
-| Industrial Core | 8 | 6 | 8 |
+A crisis consumes **one matching card**, permanently retiring it. It may come from anywhere you own it, so its availability does not depend on this month's draw. Choose the card type; the engine uses a copy in hand first, then discard, then the draw pile. It costs no Work, Buy, or Ops play. The card and its points are lost. Normal retirement effects still operate only on the cards specified in their text.
 
-All three represent materials and equipment already aboard, tested and prepared for Callisto. The starting deck still contains only Colony Stores as Cargo. Retiring a Cargo card gives up all of its printed arrival points.
+The three specialized kits have equal prices and points to make their uses the main distinction. The arrival manifest records preserved kits, those consumed in crises, and all retired Cargo by family. Descriptions suggest what the equipment is for; no colony effects are implemented yet.
 
-The ten Ops cards form the entire initial capability pool:
-
-| Ops card | Cost | Effect |
+| Ops | Cost | Effect |
 | --- | ---: | --- |
-| Streamlining | 2 | Retire up to 4 cards from your hand. |
-| Crew Sync | 3 | Draw 1; gain 2 Ops. |
-| Integrated Diagnostics | 4 | Draw 3. |
-| Salvage | 4 | Gain 1 Work; optionally retire 1 hand card. Retiring Cargo gives 2 additional Work. |
-| Cross-Training | 5 | Draw 2; gain 1 Ops. |
-| Parallel Programs | 5 | Draw 1; gain 1 Ops, 1 Work, and 1 Buy. |
-| Rapid Prototyping | 3 | Gain an Ops card costing up to 4. |
-| Load Balancing | 2 | Gain 1 Ops; discard any number of hand cards and draw that many. |
-| Systems Integration | 4 | Retire 1 hand card; gain a card costing up to 2 more. |
-| Predictive Maintenance | 5 | Draw 1; gain 1 Ops; inspect the top 2 cards, retiring, discarding, or returning each in your chosen order. |
+| Streamlining | 2 | Retire up to 4 hand cards |
+| Crew Sync | 3 | Draw 1; +2 Ops plays |
+| Integrated Diagnostics | 4 | Draw 3 |
+| Salvage | 4 | +1 Work; optionally retire 1 hand card, gaining +2 more Work if it is Cargo |
+| Cross-Training | 5 | Draw 2; +1 Ops play |
+| Parallel Programs | 5 | Draw 1; +1 Ops play; +1 Work; +1 Buy |
+| Rapid Prototyping | 3 | Gain an Ops card costing up to 4 into discard |
+| Load Balancing | 2 | +1 Ops play; discard any number of hand cards and draw that many |
+| Systems Integration | 4 | Retire 1 hand card; gain a card costing up to its cost +2 |
+| Predictive Maintenance | 5 | Draw 1; +1 Ops play; inspect top 2, then retire, discard, or reorder them |
 
-Costs are measured in Work. Each Ops pile starts with ten cards. Supplies are finite; the Work and Cargo piles have their own counts. The Earth Political Shock event restricts **all** Ops acquisition, including cards gained through effects, to three selected Ops piles for that month.
+Gains use no Work or Buy. Earth Political Shock restricts both purchases and free Ops gains that month.
 
-## Crises and arrival scoring
+## Crises, wear, and arrival
 
-A crisis occurs every third month. The first twelve months use this fixed sequence:
+All crises use normal five-card hands. Respond **after playing Work, before buying**. Spending Work on a crisis reduces purchasing power immediately. There is no generated-Work threshold or bonus for passing a check.
 
-| Month | Crisis | Starting hand | Ops cards played | Work generated |
-| --- | --- | ---: | ---: | ---: |
-| 3 | Coolant Deviation | 5 | 0 | 3 |
-| 6 | Power Bus Redundancy | 6 | 0 | 5 |
-| 9 | Cooling Loop Failure | 6 | 1 | 4 |
-| 12 | Arrival Integration Test | 7 | 1 | 6 |
+| Month | Crisis | Spend Work | Or consume | Or take |
+| --- | --- | ---: | --- | --- |
+| 3 | Coolant Leak | 4 | 1 Industry Cargo | 2 Repair Backlogs |
+| 6 | Medical Isolation | 4 | 1 Habitat Cargo | 2 Medical Follow-Ups |
+| 9 | Dosimeter Drift | 5 | 1 Science Cargo | 2 Exposure Monitoring |
+| 12 | Power Bus Redundancy | 6 | 1 Industry Cargo | 2 Fatigue |
 
-The 24-month mode repeats the pattern in months 15, 18, 21, and 24. Each scheduled crisis gets **one attempt**. Failure adds one fitting Burden; the failed crisis does not linger or retry in intervening months. The voyage continues.
+The 24-month voyage repeats the sequence at months 15, 18, 21, and 24. Each crisis gets exactly one response, with deferral always available even if the deck is empty.
 
-A crisis checks **total Work generated that month**, including Work from Ops cards, and the number of **Ops cards actually played**. It does not check unspent Work or remaining Ops actions. Spending Work on acquisitions does not undo the Work you generated for the crisis.
-
-At arrival, the score is:
+Seven events are drawn from a seeded, shuffled queue: Sensor Drift, Earth Political Shock, Solar Particle Event, Micrometeoroid Strike, Cabin Fever, Bearing Wear, and Interrupted Sleep. The last two add a Burden automatically. New Burdens enter discard and can be drawn after a reshuffle, including later in the same month. The event queue reshuffles when exhausted.
 
 ```text
-Sum of printed points on Cargo still owned + 3 × successful crises
+Arrival score = printed points on owned Cargo − number of owned Burdens
 ```
 
-Cargo counts wherever it remains in the deck, hand, discard, or play area: 1 point per Colony Stores, 3 per Habitation Modules, and 6 per Industrial Core. Retired Cargo does not score. Burdens do not directly subtract points; they make useful cards harder to draw. This creates the central tradeoff: carry cargo for the final score, or improve the deck’s ability to work through the voyage.
+Every owned zone counts, including temporarily inspected cards. Retired cards do not count. The Burden penalty keeps final-month deferral consequential. The summary also records the exact crisis responses, Work spent, Cargo preserved and used, and unresolved obligations.
 
-## Small technical structure
-
-Plain TypeScript, Vite, HTML, and CSS:
+## Structure and verification
 
 ```text
 src/
-  types.ts     Card, encounter, choice, and game-state contracts
-  content.ts   Cards, events, crises, and their text
-  engine.ts    Seeded shuffling and game transitions
-  main.ts      Browser rendering and input
-  style.css    Responsive presentation
+  types.ts      Cards, encounters, choices, and state
+  content.ts    Card and encounter data
+  engine.ts     Pure transitions and seeded shuffling
+  main.ts       Browser rendering and input
+  style.css     Dark space theme and responsive layout
 tests/
   engine.test.ts
+scripts/
+  simulate.mjs  Repeatable full-voyage smoke playtests
 ```
 
-State is a plain object containing card instances and their zones, monthly resources, the current phase and encounter, pending choices, supply counts, crisis results, and a log. Each card instance has its own identity so duplicate cards can be selected independently. Rendering does not consume randomness.
+State is one plain object. Cards have unique identities and occupy one zone each. The engine owns rules and randomness; rendering consumes no randomness. New crises use the existing Work/Cargo/Burden data fields.
 
-Card values and encounter requirements live in `content.ts`. Add an ordinary card using the existing effect fields there; introduce a new special effect in the shared type and engine only when the existing operations cannot express it. Keep the UI responsible for presentation and legal input, with rules in the engine.
+Tests protect phase order, crisis payments, Cargo families and retirement, scoring, immutable transitions, card effects, deterministic replay, and arrival at 12 and 24 months. `npm run simulate` runs 200 seeds for each of two builds and three response preferences at both lengths: 2,400 voyages. Pass a smaller or larger count with `npm run simulate -- 50`.
 
-## Verification and playtesting
+Simulated strategies are deliberately simple. They check progress, accounting, and repeatability; their scores are **not human difficulty estimates**. Balance still needs playtesting. A 10–20 minute run is a target, not a measured guarantee.
 
-The important rule checks are deterministic replay, legal phase transitions, draw/discard/reshuffle behavior, individual card selection, retirement and gain limits, finite supply, event acquisition restrictions, crisis accounting, cleanup, and final scoring. Run `npm test` for the current automated results. Automated runs can reveal broken rules or deadlocks; they cannot establish that the game is enjoyable.
+Useful playtest questions:
 
-Balance is provisional. The small pool is meant to make mechanical changes inexpensive, and the two voyage lengths exist to test whether the deck has enough time to develop. A 10–20 minute run remains a playtest target, not a measured guarantee; repeat players may finish much faster, and the 24-month mode may take longer.
+- Did you choose between spending Work, sacrificing Cargo, and accepting a Burden?
+- Did Cargo's family change what you bought or preserved?
+- Did cleanup make problems trivial, or did Burdens overwhelm weak draws?
+- Did 24 months produce new decisions or merely more of the same?
 
-Useful questions after a run:
+## Public hosting
 
-1. Did the deck develop a recognizable identity, or did the same purchases always seem best?
-2. When did carrying Cargo create an interesting decision about points versus useful draws?
-3. Did a crisis reward preparation, or mostly punish a poor hand?
-4. Did twelve months allow enough time to enjoy the deck? Did twenty-four add decisions or repetition?
-5. Which loop would you replay: this deckbuilder or v0.1’s projects and event choices?
+`npm run build:pages` builds for the `/jovian-wake/` path. The GitHub Pages workflow installs dependencies, runs tests and short simulated voyages, builds, and deploys pushes to `deckbuilding-prototype`.
 
-## Revisit v0.1
+The repository's Pages source must be **GitHub Actions**. The intended address is [kileader.github.io/jovian-wake](https://kileader.github.io/jovian-wake/). This is a static public playtest with no accounts, server, or saved runs. The deployment follows [Vite's GitHub Pages guide](https://vite.dev/guide/static-deploy.html#github-pages).
 
-The original prototype is preserved at the [`v0.1.0` tag](https://github.com/kileader/jovian-wake/tree/v0.1.0) in the [public repository](https://github.com/kileader/jovian-wake).
+## Earlier prototypes
 
-To inspect it locally, commit or stash current working changes before switching versions:
-
-```sh
-git switch --detach v0.1.0
-npm install
-npm run dev
-```
-
-Use `git switch -` to return to the previous checkout. The tagged version retains its own rules and README for comparison.
+The original project-and-event version is preserved at [v0.1.0](https://github.com/kileader/jovian-wake/tree/v0.1.0). The last threshold-based crisis version is [commit 6566eb6](https://github.com/kileader/jovian-wake/tree/6566eb6), so both remain available for comparison.
