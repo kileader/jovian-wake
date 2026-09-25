@@ -1,8 +1,8 @@
-# Jovian Wake — Prototype 0.3
+# Jovian Wake — Prototype 0.4
 
 A small TypeScript browser deckbuilder about carrying thirty people toward Jupiter. Humanity has discovered life on Europa; your one-way expedition is preparing a foothold on Callisto.
 
-This version asks whether building satisfying card combinations becomes more interesting when expedition problems compete for the same resources. The slice ends at arrival. Colony gameplay and expedition preparation remain future phases.
+This version tests whether the cruise deck you build creates interesting choices during a short Callisto commissioning phase. The cruise remains playable on its own; at arrival, you can continue into an optional six-week colony trial. Expedition preparation is not implemented.
 
 Cards represent trained routines and equipment prepared from what is already aboard. Buying a card does not mean resupply from Earth. The prototype abstracts material limits; acquisitions have no supply caps.
 
@@ -59,7 +59,7 @@ An exhausted draw pile reshuffles the discard pile. Discarding preserves a card 
 
 A crisis consumes **one matching card**, permanently retiring it. It may come from anywhere you own it, so its availability does not depend on this month's draw. Choose the card type; the engine uses a copy in hand first, then discard, then the draw pile. It costs no Work, Buy, or Ops play. The card and its points are lost. Normal retirement effects still operate only on the cards specified in their text.
 
-The three specialized kits have equal prices and points to make their uses the main distinction. The arrival manifest records preserved kits, those consumed in crises, and all retired Cargo by family. Descriptions suggest what the equipment is for; no colony effects are implemented yet.
+The three specialized kits have equal prices and points to make their uses the main distinction. The arrival manifest records preserved kits, those consumed in crises, and all retired Cargo by family. Preserved Cargo enables colony actions in the optional trial.
 
 | Ops | Cost | Effect |
 | --- | ---: | --- |
@@ -97,6 +97,14 @@ Arrival score = printed points on owned Cargo − number of owned Burdens
 
 Every owned zone counts, including temporarily inspected cards. Retired cards do not count. The Burden penalty keeps final-month deferral consequential. The summary also records the exact crisis responses, Work spent, Cargo preserved and used, and unresolved obligations.
 
+## Six weeks on Callisto
+
+From the arrival manifest, choose **Begin Callisto trial**. Each week gives two crew assignments and three power units. Commission Shelter and Recycler twice each; Habitat and Industry Cargo each save a crew assignment on their matching project. Science Cargo enables one Europa observation in each of weeks 3–6. Issues appear on a fixed schedule, and resolving one costs a crew assignment and one power.
+
+At week's end, unfinished essential systems cost one ship-support reserve; each issue from an earlier week costs one more until resolved. New issues have a week of grace. The trial ends early if reserves reach zero. At the end of week 6, a viable settlement needs both systems complete, at least one reserve, and no more than two open issues. Four observations complete the opening Europa campaign; partial science and a viable settlement can coexist.
+
+Starting reserves are five, plus one per five preserved Cargo kits (capped at two extra), minus one per three unresolved Burdens (capped at two); the minimum is three. Any Burden also starts one Crew strain issue. Cargo beyond the first kit of a family currently affects only the capped reserve calculation; the value of surplus kits is an open design question. The six-week sequence is deliberately scripted for comparison, not a full colony simulation or a tested balance model. You can retry it from the same arrival manifest.
+
 ## Structure and verification
 
 ```text
@@ -104,10 +112,12 @@ src/
   types.ts      Cards, encounters, choices, and state
   content.ts    Card and encounter data
   engine.ts     Pure transitions and seeded shuffling
+  colony.ts     Pure six-week colony trial and cruise handoff
   main.ts       Browser rendering and input
   style.css     Dark space theme and responsive layout
 tests/
   engine.test.ts
+  colony.test.ts
 scripts/
   simulate.mjs  Repeatable full-voyage smoke playtests
 ```
@@ -115,6 +125,8 @@ scripts/
 State is one plain object. Cards have unique identities and occupy one zone each. The engine owns rules and randomness; rendering consumes no randomness. New crises use the existing Work/Cargo/Burden data fields.
 
 Tests protect phase order, crisis payments, Cargo families and retirement, scoring, immutable transitions, card effects, deterministic replay, and arrival at 12 and 24 months. `npm run simulate` runs 200 seeds for each of two builds and three response preferences at both lengths: 2,400 voyages. Pass a smaller or larger count with `npm run simulate -- 50`.
+
+The colony tests protect manifest conversion, weekly budgets, issue aging, the Europa observation limit, and a viable six-week route. Voyage simulations still stop at arrival; colony balance needs human playtests.
 
 Simulated strategies are deliberately simple. They check progress, accounting, and repeatability; their scores are **not human difficulty estimates**. Balance still needs playtesting. A 10–20 minute run is a target, not a measured guarantee.
 

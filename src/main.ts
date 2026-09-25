@@ -6,10 +6,13 @@ import {
   playAllWork, playCard, resolveChoice, resolveCrisis, respondToEvent,
 } from './engine.ts';
 import type { CardId, CardInstance, Crisis, CrisisResult, GameState } from './types.ts';
+import { actionCost, endColonyWeek, startColony, takeColonyAction } from './colony.ts';
+import type { ColonyAction, ColonyState } from './colony.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const params = new URLSearchParams(location.search);
 let state = createGame(params.get('seed')?.trim().slice(0, 80) || 'CALLISTO-01', params.get('months') === '24' ? 24 : 12);
+let colony: ColonyState | null = null;
 let selected: number[] = [];
 let inspection: Record<number, 'keep' | 'discard' | 'retire'> = {};
 let reverseKept = false;
@@ -139,8 +142,26 @@ function arrival() {
     <div class="cargo-manifest" aria-label="Cargo preserved for arrival">${manifest.map(f => `<article><p class="eyebrow">${h(f.name)}</p><h3>${f.count} ${f.count === 1 ? 'kit' : 'kits'} preserved</h3><p>${h(f.purpose)}</p><p class="microcopy">${f.points} points · ${f.used} consumed in crises · ${f.retired} retired in total</p></article>`).join('')}</div>
     <div class="arrival-assessment"><div><h3>The cost of the crossing</h3><p>${workSpent} Work spent on problems. ${cargoUsed} Cargo ${cargoUsed === 1 ? 'kit' : 'kits'} consumed in response. ${state.retired.length} ${state.retired.length === 1 ? 'card' : 'cards'} retired overall.</p></div><div><h3>Unresolved obligations</h3><p>${obligations.length ? obligations.map(c => `${c.count} × ${h(c.name)}`).join('<br>') : 'No Burdens remain aboard.'}</p></div></div>
     <div class="crisis-history">${state.crisisResults.map(r => `<p><span>M${pad(r.month)}</span><strong>${h(CRISES.find(c => c.id === r.id)!.name)}</strong><span>${h(responseSummary(r))}</span></p>`).join('')}</div>
-    <div class="end-actions"><button class="primary" data-action="new">Chart another voyage ${arrow}</button><button class="text-button" data-action="replay">Replay this seed ↺</button></div>
-    <p class="microcopy">Prototype 0.3. This manifest records what arrived; colony and Europa operations are still a future phase.</p>`;
+    <div class="end-actions"><button class="primary" data-action="colony-start">Begin Callisto trial ${arrow}</button><button class="secondary" data-action="new">Chart another voyage</button><button class="text-button" data-action="replay">Replay this seed ↺</button></div>
+    <p class="microcopy">The optional six-week colony trial uses this manifest. Phase 1 preparation is not implemented.</p>`;
+}
+
+function colonyActionButton(label: string, action: ColonyAction, detail: string) {
+  const cost = actionCost(colony!, action);
+  const enabled = cost && cost.teams <= colony!.teams && cost.power <= colony!.power;
+  return `<button class="colony-action" data-colony-action="${h(action)}" ${enabled ? '' : 'disabled'}><strong>${h(label)}</strong><span>${h(detail)}</span><small>${cost ? `${cost.teams} crew · ${cost.power} power` : 'Unavailable'}</small></button>`;
+}
+
+function renderColony() {
+  const c = colony!;
+  const finished = c.status !== 'active';
+  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.4</small></span><div class="header-right"><span class="prototype-label">CALLISTO / COMMISSIONING TRIAL</span><button class="text-button" data-action="colony-back">Arrival manifest ↗</button></div></header>
+    <main class="colony-screen"><div class="mission-nav"><span>THE FIRST SIX WEEKS</span><span class="seed-display">SEED / ${h(state.seed)}</span></div>
+      <section class="colony-hero panel"><p class="eyebrow">${finished ? 'COMMISSIONING ASSESSMENT' : `WEEK ${c.week} / 6`}</p><h1 id="dispatch-title" tabindex="-1">${finished ? c.status === 'viable' ? 'The foothold holds.' : 'The foothold falters.' : 'Everything needs the same hands.'}</h1><p>${finished ? c.status === 'viable' ? 'Essential systems are commissioned, but the work and obligations continue.' : 'The settlement cannot safely leave ship support on this schedule.' : 'Assign two crew teams and three power units each week. Unused capacity expires. Europa observations begin in week 3.'}</p></section>
+      <div class="colony-stats"><article><span>SHIP RESERVES</span><strong>${c.reserves}</strong><small>Reach zero and the trial ends.</small></article><article><span>SHELTER</span><strong>${c.shelter}/2</strong><small>Habitat Cargo: ${c.cargo.habitat} kits</small></article><article><span>RECYCLER</span><strong>${c.recycler}/2</strong><small>Industry Cargo: ${c.cargo.industry} kits</small></article><article><span>EUROPA DATA</span><strong>${c.science}/4</strong><small>Science Cargo: ${c.cargo.science} kits</small></article></div>
+      ${finished ? `<section class="colony-end panel"><h2>${c.status === 'viable' ? 'Settlement viable' : 'Settlement not yet viable'}</h2><p>${c.science === 4 ? 'The opening Europa observation campaign is complete.' : c.science ? `The campaign returned ${c.science} of 4 observations.` : 'No Europa observations were completed.'} ${c.issues.length} ${c.issues.length === 1 ? 'issue remains' : 'issues remain'}.</p><div class="end-actions"><button class="primary" data-action="colony-back">Review arrival manifest ${arrow}</button><button class="secondary" data-action="colony-retry">Retry colony from this manifest</button></div></section>` : `<section class="colony-work panel"><div class="colony-work-head"><div><p class="eyebrow">AVAILABLE THIS WEEK</p><h2>${c.teams} crew ${c.teams === 1 ? 'team' : 'teams'} · ${c.power} power</h2></div><p>Each unfinished essential system costs 1 reserve at week’s end. Each issue left from an earlier week costs 1 more, every week until resolved.</p></div><div class="colony-actions">${colonyActionButton('Commission shelter', 'shelter', 'Add 1 of 2 progress. Habitat kit saves one crew team.')}${colonyActionButton('Commission recycler', 'recycler', 'Add 1 of 2 progress. Industry kit saves one crew team.')}${colonyActionButton('Observe Europa', 'science', 'Add 1 data. Once per week, weeks 3–6; requires Science kit.')}</div><h3>Problems needing attention</h3><div class="colony-issues">${c.issues.length ? c.issues.map(i => colonyActionButton(i.name, `fix:${i.id}`, i.week === c.week ? 'New this week · no reserve cost yet' : 'Overdue · costs 1 reserve this week')).join('') : '<p>No open issues.</p>'}</div><button class="primary" data-action="colony-end">End week ${c.week} ${arrow}</button></section>`}
+      <details class="voyage-log" open><summary>COMMISSIONING LOG</summary><div class="log-entries">${[...c.history].reverse().map(line => `<p>${h(line)}</p>`).join('')}</div></details><details class="how-to"><summary>Trial rules</summary><p>Two crew assignments and three power each week. Shelter and Recycler each need two commissioning actions. Without the matching Cargo family, one action takes both crew teams. Europa requires Science Cargo and can be observed once each week from week 3 onward. New issues have one week of grace; older open issues drain reserves. At week 6, viability needs both systems complete, at least one reserve, and no more than two open issues.</p><p>Starting reserves are five, plus one per five preserved Cargo kits, capped at two extra; three unresolved cruise Burdens remove one reserve, up to two. Any Burden also starts one Crew strain issue. This is a short systems test, not a full colony simulation.</p></details>
+    </main>`;
 }
 
 function pendingPanel() {
@@ -227,16 +248,17 @@ function purchaseDock() {
 }
 
 function render(focus = false) {
+  if (colony) { renderColony(); if (focus) app.querySelector<HTMLElement>('#dispatch-title')?.focus(); return; }
   const focused = document.activeElement as HTMLElement | null;
   const focusSelector = focused?.dataset.card ? `[data-card="${focused.dataset.card}"]` : focused?.dataset.supply ? `[data-supply="${focused.dataset.supply}"]` : focused?.dataset.inspect ? `[data-inspect="${focused.dataset.inspect}"]` : '';
-  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.3</small></span><div class="header-right"><span class="prototype-label">A CRUISE DECKBUILDER</span><button class="text-button" data-action="restart">New voyage ↗</button></div></header>
+  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.4</small></span><div class="header-right"><span class="prototype-label">CRUISE / COLONY TRIAL</span><button class="text-button" data-action="restart">New voyage ↗</button></div></header>
     <main data-phase="${state.phase}" data-month="${state.month}"><div class="mission-nav"><span>EXPEDITION CONTROL</span><span class="seed-display">SEED / ${h(state.seed)}</span></div>${hero()}${counters()}
     <div class="game-layout deck-layout"><div class="main-column"><section class="dispatch panel" aria-labelledby="dispatch-title">${state.phase === 'briefing' ? briefing() : state.phase === 'report' ? report() : state.phase === 'arrived' ? arrival() : turnPanel()}</section>${handPanel()}</div>${deckPanel()}</div>
     <div class="sr-only" aria-live="polite">Month ${state.month}, ${state.phase} phase. ${state.ops} Ops, ${state.work} Work, ${state.buys} Buys.${state.pending ? ' A card choice is pending.' : ''} ${h(state.log.at(-1)?.title || '')}</div>
     ${supplyPanel()}
     <details class="voyage-log" ${logOpen ? 'open' : ''}><summary>VOYAGE LOG <span class="log-count">${state.log.length} ENTRIES</span></summary><div class="log-entries">${[...state.log].reverse().map(e => `<article><span class="log-month">M${pad(e.month)}</span><div><h3>${h(e.title)}</h3><p>${h(e.text)}</p></div></article>`).join('') || '<p>The voyage has yet to begin.</p>'}</div></details>
-    <details class="how-to"><summary>Rules & card types</summary><p><strong>Work</strong> generates this month’s purchasing power. <strong>Ops</strong> spends one Ops play and resolves its card text; extra Ops lets you chain cards. <strong>Cargo</strong> scores at arrival and can be permanently consumed for matching crisis responses. It has no normal play effect. <strong>Burden</strong> clogs your draws and costs 1 point at arrival if unresolved.</p><p>Play Ops first, then Work, respond to any crisis, then acquire cards. You cannot return to an earlier phase. Gained cards go to discard. When the draw pile runs out, shuffle the discard pile. Cleanup discards the entire hand and all cards in play; leftover Work, Ops, and Buys expire.</p><p>Retirement permanently removes a card and forfeits its points. Every owned Cargo card scores its printed value; each owned Burden subtracts 1 point. Score includes all owned piles. Every third month brings a choice: spend Work, permanently consume matching Cargo, or accept Burdens. Paying Work reduces what you can buy. Cargo can be taken from any owned pile, using a copy in hand first, then discard, then draw. The 24-month mode repeats the four-crisis sequence. Some events automatically add a Burden after the opening draw. Acquisitions have no supply caps; they represent preparations using equipment already aboard.</p><p>The same seed, length, and choices reproduce a voyage. No saves across reloads. These are deliberately compressed gameplay timescales, not a trajectory simulation. No colony phase or ship upgrades yet.</p></details>
-    <footer><span>JOVIAN WAKE <b>/</b> PROTOTYPE 0.3</span><span>THE DISTANCE IS THE TEST.</span></footer></main>${purchaseDock()}
+    <details class="how-to"><summary>Rules & card types</summary><p><strong>Work</strong> generates this month’s purchasing power. <strong>Ops</strong> spends one Ops play and resolves its card text; extra Ops lets you chain cards. <strong>Cargo</strong> scores at arrival and can be permanently consumed for matching crisis responses. It has no normal play effect. <strong>Burden</strong> clogs your draws and costs 1 point at arrival if unresolved.</p><p>Play Ops first, then Work, respond to any crisis, then acquire cards. You cannot return to an earlier phase. Gained cards go to discard. When the draw pile runs out, shuffle the discard pile. Cleanup discards the entire hand and all cards in play; leftover Work, Ops, and Buys expire.</p><p>Retirement permanently removes a card and forfeits its points. Every owned Cargo card scores its printed value; each owned Burden subtracts 1 point. Score includes all owned piles. Every third month brings a choice: spend Work, permanently consume matching Cargo, or accept Burdens. Paying Work reduces what you can buy. Cargo can be taken from any owned pile, using a copy in hand first, then discard, then draw. The 24-month mode repeats the four-crisis sequence. Some events automatically add a Burden after the opening draw. Acquisitions have no supply caps; they represent preparations using equipment already aboard.</p><p>The same seed, length, and choices reproduce a voyage. No saves across reloads. These are deliberately compressed gameplay timescales, not a trajectory simulation. The optional six-week colony trial begins from the arrival manifest; Phase 1 preparation is not implemented.</p></details>
+    <footer><span>JOVIAN WAKE <b>/</b> PROTOTYPE 0.4</span><span>THE DISTANCE IS THE TEST.</span></footer></main>${purchaseDock()}
     <dialog id="restart-dialog" aria-labelledby="restart-title"><form id="restart-form"><p class="eyebrow">A DIFFERENT CROSSING</p><h2 id="restart-title">Chart a new voyage.</h2><p>${state.month && state.phase !== 'arrived' ? 'This will end your current run. ' : ''}Use the same seed to replay the same starting conditions.</p><label class="seed-label" for="restart-seed">VOYAGE SEED<input id="restart-seed" maxlength="80" required value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label><label class="seed-label" for="restart-months">LENGTH<select id="restart-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months</option></select></label><div class="dialog-actions"><button type="button" class="text-button" data-action="random-seed">Generate seed ↺</button><div><button type="button" class="secondary" data-action="cancel-restart">Cancel</button><button type="submit" class="primary">Begin again ↗</button></div></div></form></dialog>`;
   app.querySelector<HTMLDetailsElement>('.voyage-log')!.addEventListener('toggle', e => { logOpen = (e.target as HTMLDetailsElement).open; });
   app.querySelector<HTMLDetailsElement>('.inventory')!.addEventListener('toggle', e => { inventoryOpen = (e.target as HTMLDetailsElement).open; });
@@ -259,6 +281,7 @@ function update(next: GameState, focus = false) {
 
 function reset(seed: string, months = state.totalMonths) {
   state = createGame(seed.trim().slice(0, 80) || 'CALLISTO-01', months);
+  colony = null;
   selected = [];
   inspection = {};
   reverseKept = false;
@@ -275,6 +298,13 @@ function reset(seed: string, months = state.totalMonths) {
 app.addEventListener('click', e => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (!button || button.disabled) return;
+  if (colony) {
+    if (button.dataset.colonyAction) { colony = takeColonyAction(colony, button.dataset.colonyAction as ColonyAction); render(); return; }
+    if (button.dataset.action === 'colony-end') { colony = endColonyWeek(colony); render(true); return; }
+    if (button.dataset.action === 'colony-retry') { colony = startColony(state); render(true); return; }
+    if (button.dataset.action === 'colony-back') { colony = null; render(true); return; }
+    return;
+  }
   if (button.dataset.card) {
     const uid = Number(button.dataset.card);
     if (state.pending?.kind === 'retire' || state.pending?.kind === 'discard') {
@@ -290,6 +320,7 @@ app.addEventListener('click', e => {
   }
   const dialog = app.querySelector<HTMLDialogElement>('#restart-dialog')!;
   switch (button.dataset.action) {
+    case 'colony-start': colony = startColony(state); render(true); break;
     case 'begin': {
       if (state.phase === 'briefing') reset(app.querySelector<HTMLInputElement>('#launch-seed')!.value, Number(app.querySelector<HTMLSelectElement>('#launch-months')!.value));
       update(beginMonth(state), true);

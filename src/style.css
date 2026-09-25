@@ -796,6 +796,36 @@ button:disabled { cursor: default; }
 .purchase-dock strong { font: 12px var(--mono); }
 .purchase-dock p { font-size: 10px; margin-top: 5px; color: var(--muted); }
 main[data-phase="buy"] { padding-bottom: 100px; }
+.colony-screen { max-width: 1200px; margin: 0 auto; padding: 30px 5% 80px; }
+.colony-hero { padding: 34px; margin: 24px 0; }
+.colony-hero h1 { font: 52px/1.05 var(--display); margin: 12px 0; }
+.colony-hero > p:last-child { color: var(--muted); line-height: 1.7; }
+.colony-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.colony-stats article { background: var(--raised); border: 1px solid var(--line); padding: 18px; display: grid; gap: 8px; }
+.colony-stats span { font: 10px var(--mono); letter-spacing: 1px; color: var(--muted); }
+.colony-stats strong { font: 42px/1 var(--display); color: var(--orange); }
+.colony-stats small { color: var(--muted); }
+.colony-work, .colony-end { padding: 28px; }
+.colony-work-head { display: flex; justify-content: space-between; gap: 30px; border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 20px; }
+.colony-work-head h2, .colony-end h2 { font: 32px var(--display); margin: 8px 0; }
+.colony-work-head > p { max-width: 440px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.colony-actions, .colony-issues { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 24px; }
+.colony-issues { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.colony-work h3 { font: 26px var(--display); }
+.colony-action { text-align: left; display: flex; flex-direction: column; gap: 8px; min-height: 135px; border: 1px solid var(--line); background: var(--raised); color: var(--ink); padding: 16px; }
+.colony-action:not(:disabled):hover { background: var(--hover); border-color: var(--orange); }
+.colony-action:disabled { opacity: .48; }
+.colony-action strong { font: 23px var(--display); }
+.colony-action span { font-size: 11px; line-height: 1.5; color: var(--muted); }
+.colony-action small { margin-top: auto; font: 10px var(--mono); color: var(--orange); }
+.colony-end p { line-height: 1.7; margin-bottom: 20px; }
+@media (max-width: 700px) {
+  .colony-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .colony-work-head { display: block; }
+  .colony-work-head > p { margin-top: 10px; }
+  .colony-actions, .colony-issues { grid-template-columns: 1fr; }
+  .colony-hero h1 { font-size: 40px; }
+}
 @media (min-width: 1500px) { main { max-width: 1460px; } }
 @media (max-width: 1050px) {
   .supply-cargo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
