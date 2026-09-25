@@ -47,8 +47,18 @@ When a draw exhausts the deck, the discard pile is shuffled into a new deck. Dis
 | --- | --- |
 | **Work** | Crew Shift, Specialist Shift, and Expert Shift produce 1, 2, and 3 Work respectively. |
 | **Ops** | Procedures that draw cards, grant actions, generate effort, or change the deck. |
-| **Cargo** | Colony Stores are worth 1 point each at arrival, but have no play effect and occupy hand space. |
+| **Cargo** | Three tiers of prepared stores and equipment score their printed points at arrival. They have no play effect and occupy hand space. |
 | **Burden** | Fatigue, Repair Backlog, Exposure Monitoring, Crew Conflict, and Medical Follow-Up have no play effect or points. They enter through consequences and cannot be bought. |
+
+The Cargo piles offer more points per card as the deck becomes capable of more expensive acquisitions:
+
+| Cargo card | Cost in Work | Arrival points | Supply |
+| --- | ---: | ---: | ---: |
+| Colony Stores | 2 | 1 | 12 |
+| Habitation Modules | 5 | 3 | 8 |
+| Industrial Core | 8 | 6 | 8 |
+
+All three represent materials and equipment already aboard, tested and prepared for Callisto. The starting deck still contains only Colony Stores as Cargo. Retiring a Cargo card gives up all of its printed arrival points.
 
 The ten Ops cards form the entire initial capability pool:
 
@@ -85,10 +95,10 @@ A crisis checks **total Work generated that month**, including Work from Ops car
 At arrival, the score is:
 
 ```text
-1 × Colony Stores still owned + 3 × successful crises
+Sum of printed points on Cargo still owned + 3 × successful crises
 ```
 
-Cargo counts wherever it remains in the deck, hand, discard, or play area. Retired Cargo does not score. Burdens do not directly subtract points; they make useful cards harder to draw. This creates the central tradeoff: carry cargo for the final score, or improve the deck’s ability to work through the voyage.
+Cargo counts wherever it remains in the deck, hand, discard, or play area: 1 point per Colony Stores, 3 per Habitation Modules, and 6 per Industrial Core. Retired Cargo does not score. Burdens do not directly subtract points; they make useful cards harder to draw. This creates the central tradeoff: carry cargo for the final score, or improve the deck’s ability to work through the voyage.
 
 ## Small technical structure
 

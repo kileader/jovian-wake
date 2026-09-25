@@ -1,6 +1,7 @@
 export type CardType = 'Work' | 'Ops' | 'Cargo' | 'Burden';
 export type CardId =
   | 'crew-shift' | 'specialist-shift' | 'expert-shift' | 'colony-stores'
+  | 'habitation-modules' | 'industrial-core'
   | 'streamlining' | 'crew-sync' | 'integrated-diagnostics' | 'salvage'
   | 'cross-training' | 'parallel-programs' | 'rapid-prototyping'
   | 'load-balancing' | 'systems-integration' | 'predictive-maintenance'

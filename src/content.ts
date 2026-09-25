@@ -30,6 +30,18 @@ export const CARDS: CardDefinition[] = [
     points: 1,
   },
   {
+    id: 'habitation-modules', name: 'Habitation Modules', type: 'Cargo', cost: 5, supply: 8,
+    text: 'Worth 3 points at arrival. No play effect.',
+    flavor: 'Stowed shelter sections tested, outfitted, and repacked for deployment on Callisto.',
+    points: 3,
+  },
+  {
+    id: 'industrial-core', name: 'Industrial Core', type: 'Cargo', cost: 8, supply: 8,
+    text: 'Worth 6 points at arrival. No play effect.',
+    flavor: 'Machine tools and power hardware already aboard, tested and prepared as a working surface workshop.',
+    points: 6,
+  },
+  {
     id: 'streamlining', name: 'Streamlining', type: 'Ops', cost: 2, supply: 10,
     text: 'Retire up to 4 cards from your hand.',
     flavor: 'Close stale work orders and stop carrying procedures nobody needs.',

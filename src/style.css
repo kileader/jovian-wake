@@ -745,7 +745,7 @@ button:disabled { cursor: default; }
 .section-heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin: 32px 0 18px; }
 .section-heading h2 { font: 32px var(--display); margin-top: 6px; }
 .section-heading > p { max-width: 370px; font-size: 11px; line-height: 1.8; color: var(--muted); }
-.supply-basics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.supply-basics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
 .supply-ops { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .supply-card { min-height: 222px; }
 .supply-basics .supply-card { min-height: 165px; }

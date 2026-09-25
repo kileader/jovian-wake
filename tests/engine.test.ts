@@ -74,6 +74,12 @@ test('the catalogue contains the ten defined Ops and the four escalating crises'
   assert.deepEqual(CARDS.filter((card) => card.type === 'Ops').map((card) => card.id).sort(), [...OPS].sort());
   const prices = [2, 3, 4, 4, 5, 5, 3, 2, 4, 5];
   OPS.forEach((id, index) => assert.equal(cardById(id).cost, prices[index], id));
+  assert.deepEqual(CARDS.filter((card) => card.type === 'Cargo').map(({ id, cost, points, supply }) =>
+    ({ id, cost, points, supply })), [
+    { id: 'colony-stores', cost: 2, points: 1, supply: 12 },
+    { id: 'habitation-modules', cost: 5, points: 3, supply: 8 },
+    { id: 'industrial-core', cost: 8, points: 6, supply: 8 },
+  ]);
   assert.deepEqual(CRISES.map(({ handSize, requiredOps, requiredWork }) =>
     [handSize, requiredOps, requiredWork]), [[5, 0, 4], [5, 0, 6], [4, 2, 5], [5, 2, 7]]);
   for (const event of EVENTS) {
@@ -182,8 +188,11 @@ test('Streamlining can retire up to four hand cards but never duplicate or forei
   assert.equal(skipped.retired.length, 0);
 });
 
-test('Salvage generates one Work and gives two additional Work only for retired Cargo', () => {
-  for (const [target, expected] of [['colony-stores', 3], ['crew-shift', 1]] as [CardId, number][]) {
+test('Salvage gives a fixed two additional Work for any retired Cargo, regardless of its points', () => {
+  const cases: [CardId, number][] = [
+    ['colony-stores', 3], ['habitation-modules', 3], ['industrial-core', 3], ['crew-shift', 1],
+  ];
+  for (const [target, expected] of cases) {
     const state = turn(['salvage', target]);
     const played = playCard(state, state.hand[0].uid);
     assert.equal(played.work, 1);
@@ -191,6 +200,7 @@ test('Salvage generates one Work and gives two additional Work only for retired 
     assert.equal(result.work, expected);
     assert.equal(result.workGenerated, expected);
     assert.deepEqual(ids(result.retired), [target]);
+    assert.equal(getScore(result).cargo, 0, 'Retired Cargo no longer contributes arrival points');
   }
   const state = turn(['salvage', 'colony-stores']);
   const played = playCard(state, state.hand[0].uid);
@@ -209,6 +219,7 @@ test('Rapid Prototyping gains an affordable Ops card without spending Work or a 
   assert.equal(result.work, 0);
   assert.equal(result.buys, 1);
   assert.equal(result.pending, null);
+  assert.ok(result.log.some((entry) => entry.kind === 'purchase' && entry.title === 'Gained Integrated Diagnostics'));
 });
 
 test('Load Balancing discards chosen hand cards and redraws exactly that many', () => {
@@ -239,6 +250,17 @@ test('Systems Integration retires exactly one card and gains up to its cost plus
   assert.equal(gained.buys, 1);
   assert.equal(gained.work, 0);
   assert.equal(gained.pending, null);
+  assert.ok(gained.log.some((entry) => entry.kind === 'purchase' && entry.title === 'Gained Cross-Training'));
+
+  // Habitation Modules cost 5 but score 3: its upgrade ceiling must be 7, not 5.
+  const cargo = turn(['systems-integration', 'habitation-modules']);
+  const cargoPlayed = playCard(cargo, cargo.hand[0].uid);
+  const cargoRetired = resolveChoice(cargoPlayed, { type: 'cards', uids: [cargoPlayed.hand[0].uid] });
+  assert.equal(resolveChoice(cargoRetired, { type: 'gain', cardId: 'industrial-core' }), cargoRetired);
+  const expert = resolveChoice(cargoRetired, { type: 'gain', cardId: 'expert-shift' });
+  assert.deepEqual(ids(expert.discard), ['expert-shift']);
+  assert.deepEqual(ids(expert.retired), ['habitation-modules']);
+  assert.equal(expert.pending, null);
 });
 
 test('Predictive Maintenance draws first and partitions inspected cards without loss or duplication', () => {
@@ -313,6 +335,31 @@ test('purchases consume finite piles, Work, and Buys and issue unique card insta
   assert.ok(second.discard.every((card) => card.uid >= state.nextUid));
   assert.equal(canAcquire(state, 'fatigue'), false);
   assert.equal(buyCard(state, 'fatigue'), state);
+});
+
+test('expensive Cargo requires its full price and cannot be bought after its pile empties', () => {
+  const cases: [CardId, number, number][] = [['habitation-modules', 5, 3], ['industrial-core', 8, 6]];
+  for (const [id, cost, points] of cases) {
+    const short = turn([], [], [], { phase: 'buy', work: cost - 1, buys: 2 });
+    short.supply[id] = 1;
+    assert.equal(canBuyCard(short, id), false);
+    assert.equal(buyCard(short, id), short);
+    const affordable = { ...short, work: cost + 2 };
+    const bought = buyCard(affordable, id);
+    assert.equal(bought.work, 2);
+    assert.equal(bought.buys, 1);
+    assert.equal(bought.supply[id], 0);
+    assert.deepEqual(ids(bought.discard), [id]);
+    assert.equal(getScore(bought).cargo, points);
+    const depleted = { ...bought, work: cost };
+    assert.equal(canBuyCard(depleted, id), false);
+    assert.equal(buyCard(depleted, id), depleted);
+    for (const phase of ['ops', 'work'] as const) {
+      const held = turn([id], [], [], { phase });
+      assert.equal(canPlayCard(held, held.hand[0].uid), false);
+      assert.equal(playCard(held, held.hand[0].uid), held);
+    }
+  }
 });
 
 test('acquisition restrictions apply equally to purchases and free gains, but never to owned Ops', () => {
@@ -418,11 +465,11 @@ test('failing either crisis threshold gains exactly one Burden', () => {
   }
 });
 
-test('score includes Cargo in every owned zone and successful crises, excluding retired cards', () => {
-  const state = turn(['colony-stores'], ['colony-stores'], ['colony-stores', 'fatigue'], {
-    inPlay: [{ id: 'colony-stores', uid: 10 }],
-    retired: [{ id: 'colony-stores', uid: 11 }],
-    pending: { kind: 'inspect', source: 'predictive-maintenance', cards: [{ id: 'colony-stores', uid: 12 }] },
+test('score weights mixed Cargo in every owned zone and excludes retired Cargo', () => {
+  const state = turn(['habitation-modules'], ['industrial-core'], ['colony-stores', 'fatigue'], {
+    inPlay: [{ id: 'habitation-modules', uid: 10 }],
+    retired: [{ id: 'industrial-core', uid: 11 }],
+    pending: { kind: 'inspect', source: 'predictive-maintenance', cards: [{ id: 'industrial-core', uid: 12 }] },
     crisisResults: [
       { month: 3, id: CRISES[0].id, success: true, work: 4, ops: 0 },
       { month: 6, id: CRISES[1].id, success: false, work: 3, ops: 1 },
@@ -430,7 +477,7 @@ test('score includes Cargo in every owned zone and successful crises, excluding 
     ],
   });
   assert.equal(ownedCards(state).length, 6);
-  assert.deepEqual(getScore(state), { cargo: 5, crises: 6, total: 11 });
+  assert.deepEqual(getScore(state), { cargo: 19, crises: 6, total: 25 });
 });
 
 test('arrival occurs after exactly 12 or 24 months, including the final crisis', () => {
