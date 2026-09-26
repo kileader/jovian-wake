@@ -46,7 +46,8 @@ function briefing() {
     <div class="launch-controls"><label class="seed-label" for="launch-seed">VOYAGE SEED<input id="launch-seed" maxlength="80" value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label>
     <label class="seed-label" for="launch-months">LENGTH<select id="launch-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months · quick test</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months · longer build</option></select></label>
     <button class="primary" data-action="begin">Begin the cruise ${arrow}</button></div>
-    <p class="microcopy">Starting deck: 7 Crew Shifts and 3 Colony Stores. No timer. Reloading resets the voyage.</p>`;
+    <p class="microcopy">Starting deck: 7 Crew Shifts and 3 Colony Stores. No timer. Reloading resets the voyage.</p>
+    <p class="microcopy"><a href="?mode=engineering" style="text-decoration: underline">Try the engineering experiment ↗</a> · Eight watches of coupled machinery, diagnosis, and commissioning.</p>`;
 }
 
 function crisisTerms(crisis: Crisis) {

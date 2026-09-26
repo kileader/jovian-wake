@@ -6,6 +6,14 @@ This version tests whether the cruise deck you build creates interesting choices
 
 Cards represent trained routines and equipment prepared from what is already aboard. Buying a card does not mean resupply from Earth. The prototype abstracts material limits; acquisitions have no supply caps.
 
+## Engineering experiment
+
+The `codex/engineering-experiment` branch also contains a separate eight-watch experiment in coupled power, cooling, life support, and diagnosis. Open `?mode=engineering` on the local game, or choose **Try the engineering experiment** in the cruise briefing. The cruise and six-week colony trial remain the comparison baseline.
+
+Operate the same utility package through four cruise watches and four Callisto commissioning watches. Internal wear can be inspected; maintenance records, spares, crew assignments, operating choices, and downstream consequences persist across arrival. Four fixed starting cases and an optional full-information view support comparison. The final debrief reveals actual causes and includes a copyable/downloadable JSON run record. Reloading starts over.
+
+This tests whether causal equipment history and diagnosis create interesting strategy. It is not yet a colony society simulation or a physical spacecraft model. See [the experiment rules and playtest plan](docs/engineering-experiment.md).
+
 ## Play locally
 
 Requires Node.js 24 or later and npm. No account, API key, or backend is needed.
@@ -109,15 +117,20 @@ Starting reserves are five, plus one per five preserved Cargo kits (capped at tw
 
 ```text
 src/
+  entry.ts      Selects the cruise baseline or engineering experiment
   types.ts      Cards, encounters, choices, and state
   content.ts    Card and encounter data
   engine.ts     Pure transitions and seeded shuffling
   colony.ts     Pure six-week colony trial and cruise handoff
+  engineering.ts       Pure coupled utilities, crew actions, and diagnosis
+  engineering-view.ts  Engineering briefing, controls, telemetry, and debrief
+  engineering.css      Responsive experiment layout
   main.ts       Browser rendering and input
   style.css     Dark space theme and responsive layout
 tests/
   engine.test.ts
   colony.test.ts
+  engineering.test.ts
 scripts/
   simulate.mjs  Repeatable full-voyage smoke playtests
 ```
