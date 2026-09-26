@@ -673,6 +673,8 @@ button:disabled { cursor: default; }
 .dispatch-header { margin-bottom: 16px; }
 .dispatch h2 { margin: 8px 0 14px; font-size: 32px; }
 .dispatch-body { line-height: 1.7; font-size: 13px; }
+.next-action { display: flex; align-items: baseline; gap: 14px; margin: 18px 0; padding: 13px 15px; background: var(--notice); border-left: 3px solid var(--orange); font-size: 12px; line-height: 1.6; }
+.next-action strong { flex: none; color: var(--orange); font: 10px var(--mono); letter-spacing: 1px; }
 .launch-controls { gap: 12px; flex-wrap: wrap; }
 .launch-controls .seed-label { max-width: none; flex: 1 1 150px; }
 .seed-label select { font: 12px var(--mono); letter-spacing: 0; }
@@ -860,6 +862,7 @@ main[data-phase="buy"] { padding-bottom: 100px; }
   main[data-phase="event"] .deck-panel, main[data-phase="ops"] .deck-panel, main[data-phase="work"] .deck-panel, main[data-phase="buy"] .deck-panel, main[data-phase="crisis"] .deck-panel { display: none; }
   .dispatch { padding: 22px; }
   .dispatch h2 { font-size: 30px; }
+  .next-action { flex-direction: column; gap: 5px; }
   .dispatch-header { align-items: flex-start; }
   .status-tag { font-size: 7px; }
   .turn-counters > div { padding: 10px 12px; flex-direction: column; align-items: flex-start; gap: 2px; }

@@ -36,17 +36,17 @@ function hero() {
 }
 
 function briefing() {
-  return `<p class="eyebrow">CAPTAIN’S BRIEFING / DECKBUILDING EXPERIMENT</p><h2 id="dispatch-title" tabindex="-1">There is no resupply.</h2>
-    <p class="dispatch-body">Life beneath Europa’s ice. A foothold on Callisto. Thirty people carrying everything they need across the dark. Build the crew’s routines and decide what arrives with you.</p>
+  return `<p class="eyebrow">CAPTAIN’S BRIEFING / HOW TO PLAY</p><h2 id="dispatch-title" tabindex="-1">Get the crew to Callisto.</h2>
+    <p class="dispatch-body">Build a stronger deck during the voyage. At arrival, your Cargo earns points and each Burden loses a point. Try to bring useful equipment without letting problems pile up.</p>
     <ol class="briefing-steps">
-      <li><span>01</span><div><strong>Draw five. Start with 1 Ops play and 1 Buy.</strong><p>Play Ops for effects, then Work to prepare new cards. Acquired cards go to your discard pile and return after a shuffle.</p></div></li>
-      <li><span>02</span><div><strong>Cruise → Event → Crisis. Repeat.</strong><p>Every third month brings a decision. After playing your hand, spend Work, consume matching Cargo, or take Burdens. Then buy cards with what remains.</p></div></li>
-      <li><span>03</span><div><strong>Bring something worth keeping.</strong><p>Habitat, Industry, and Science Cargo solve different crises, but using a kit forfeits its arrival points. Unresolved Burdens clog your draws and cost 1 point each at arrival.</p></div></li>
+      <li><span>01</span><div><strong>First month: click “Play Work.”</strong><p>Your starting hand has no Ops cards. The button plays every Crew Shift in your hand and gives you Work to spend.</p></div></li>
+      <li><span>02</span><div><strong>Choose a card, then end the month.</strong><p>Click a card in the supply that you can afford. It goes to your discard pile and joins your deck after a shuffle.</p></div></li>
+      <li><span>03</span><div><strong>Repeat with new hands.</strong><p>Later, play Ops cards before Work. Every third month, handle a crisis before buying. You can spend Work, use matching Cargo, or take Burdens.</p></div></li>
     </ol>
     <div class="launch-controls"><label class="seed-label" for="launch-seed">VOYAGE SEED<input id="launch-seed" maxlength="80" value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label>
     <label class="seed-label" for="launch-months">LENGTH<select id="launch-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months · quick test</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months · longer build</option></select></label>
     <button class="primary" data-action="begin">Begin the cruise ${arrow}</button></div>
-    <p class="microcopy">Starting deck: 7 Crew Shift, 3 Colony Stores. No timer. Reloading resets the voyage.</p>`;
+    <p class="microcopy">Starting deck: 7 Crew Shifts and 3 Colony Stores. No timer. Reloading resets the voyage.</p>`;
 }
 
 function crisisTerms(crisis: Crisis) {
@@ -88,11 +88,36 @@ function turnPanel() {
   return `<div class="dispatch-header"><span class="eyebrow">MONTH ${pad(state.month)} / ${state.encounter.kind.toUpperCase()}</span><span class="status-tag">${state.totalMonths - state.month} MONTHS AFTER THIS</span></div>
     <h2 id="dispatch-title" tabindex="-1">${h(crisis?.name || event?.name || 'Room to work.')}</h2>
     <p class="dispatch-body">${h(crisis?.description || event?.description || 'No new fault has the crew’s attention. Use this month to strengthen the routines you will need later.')}</p>
+    ${nextAction()}
     ${event ? `<p class="event-rule">${h(event.rule)}</p>` : ''}
     ${event?.effect.kind === 'gain-burden' ? burdenPreview(event.effect.burden) : ''}
     ${crisisDecision()}
     ${state.phase === 'event' && event?.effect.kind === 'discard-or-burden' ? eventDecision(event.effect) : ''}
     ${phaseControls()}`;
+}
+
+function nextAction() {
+  let instruction: string;
+  if (state.pending) {
+    instruction = state.pending.kind === 'gain' ? 'Choose a free card from the supply below.'
+      : state.pending.kind === 'inspect' ? 'Choose what happens to each inspected card, then confirm.'
+      : 'Select cards from your hand below, then confirm your choice.';
+  } else if (state.phase === 'event') {
+    instruction = 'Choose one event response below to continue.';
+  } else if (state.phase === 'ops') {
+    instruction = state.ops > 0 && state.hand.some(c => cardById(c.id).type === 'Ops')
+      ? 'Play an Ops card from your hand, or finish Ops and play all Work.'
+      : 'Click “Play Work” below. Your Work cards will play automatically.';
+  } else if (state.phase === 'work') {
+    instruction = 'Play your Work cards, or use the button below to play them all.';
+  } else if (state.phase === 'crisis') {
+    instruction = 'Choose one crisis response below. You can buy cards afterward.';
+  } else {
+    instruction = state.buys > 0
+      ? `You have ${state.work} Work and ${state.buys} ${state.buys === 1 ? 'Buy' : 'Buys'}. Click an affordable card in the supply below, or end the month.`
+      : 'You have no Buys left. End the month to draw a new hand.';
+  }
+  return `<p class="next-action"><strong>YOUR NEXT MOVE</strong><span>${instruction}</span></p>`;
 }
 
 function eventDecision(effect: { count: number; cardType?: string; burden: CardId }) {
