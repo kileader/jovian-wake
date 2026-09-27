@@ -1,8 +1,8 @@
-name: Publish cruise playtest
+name: Publish Jovian Wake playtest
 
 on:
   push:
-    branches: [deckbuilding-prototype]
+    branches: [deckbuilding-prototype, codex/engineering-experiment]
   workflow_dispatch:
 
 permissions:

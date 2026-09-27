@@ -25,6 +25,7 @@ export function mountEngineering() {
   let selectedCrew: CrewId = 'engineer';
   let logOpen = false;
   let message = '';
+  let triedSample = false;
 
   function restart() {
     state = createEngineering(caseId);
@@ -33,6 +34,7 @@ export function mountEngineering() {
     selectedCrew = 'engineer';
     logOpen = false;
     message = '';
+    triedSample = false;
     const url = new URL(location.href);
     url.searchParams.set('case', caseId);
     history.replaceState(null, '', url);
@@ -45,9 +47,9 @@ export function mountEngineering() {
 
   function briefing() {
     return `<main class="eng-shell"><section class="eng-brief panel"><p class="eyebrow">A SHORT GAME TEST / FINAL APPROACH</p><h1>Keep the crew<br>supplied.</h1><p class="eng-lead">This is an eight-period test for a possible Jovian Wake game. You're approaching Callisto. Keep the expedition's power and recycling equipment working through the crossing. Then use that same equipment to connect the first habitat.</p>
-      <div class="eng-brief-grid"><div><h2>Your goal</h2><p>Survive eight work periods without exhausting stores. After landing, connect the habitat twice and finish with enough recycled supplies for the crew. Europa research is optional.</p><p>Some starting conditions have a hidden weak point. Equipment only shows its limits when you ask it to do work.</p></div><div><h2>What you'll do</h2><p>Each period, assign one job to Mira and one to Alex. Inspect to learn more about a system. Service it to improve it a little, or spend a spare part to repair it.</p><p>Research, repairs, and habitat work all use the same limited power. Decide what matters most, then run the period to see the consequences.</p></div></div>
+      <div class="eng-brief-grid"><div><h2>Your goal</h2><p>Survive eight work periods without exhausting stores. After landing, connect the habitat twice and finish with enough recycled supplies for the crew. Europa research is optional.</p><p>Some starting conditions have a hidden weak point. Equipment only shows its limits when you ask it to do work.</p></div><div><h2>How a period works</h2><ol><li>Check the power and recycling readings.</li><li>Give Mira and Alex up to one job each. Inspections reveal faults; service or repair improves equipment. Projects need power to finish.</li><li>Click <strong>Run watch</strong>. Supplies are used, projects finish or stall, and equipment ages. Repeat with what you learned.</li></ol></div></div>
       <div class="eng-case-controls"><label for="eng-case">STARTING SETUP<select id="eng-case">${CASES.map((id, i) => `<option value="${id}" ${id === caseId ? 'selected' : ''}>Test ${String.fromCharCode(65 + i)}</option>`).join('')}</select></label><label class="eng-check"><input id="eng-info" type="checkbox" ${fullInfo ? 'checked' : ''}> Show actual equipment condition</label><button class="primary" data-ui="start">Start the approach ↗</button></div>
-      <p class="microcopy">The tests replay the same starting conditions. Actual equipment condition stays hidden unless you inspect it or switch on full information.</p>
+      <p class="microcopy">Start with Test A for a guided first period. The tests replay the same starting conditions. Actual equipment condition stays hidden unless you inspect it or switch on full information.</p>
     </section>${rules()}</main>`;
   }
 
@@ -86,6 +88,17 @@ export function mountEngineering() {
     const scienceIndex = state.jobs.findIndex(job => job.kind === 'science');
     const scheduled = scienceIndex >= 0;
     const test = scheduled ? getReadings(state) : getReadings({ ...state, jobs: [{ kind: 'science', crew: 'engineer' }] });
+    if (caseId === 'WAKE-01') {
+      const finding = state.systems.cooling.finding;
+      const body = finding
+        ? `<p>Mira found ${finding.wear}/9 wear in cooling. You have a cause for the power limit. A repair would temporarily lower output this period, so try it next period. Run this period to see what changes.</p><button class="primary" data-ui="end">Run watch 1 ↗</button>`
+        : scheduled
+          ? `<p>The observation will stall: it gets ${test.jobPower[scienceIndex]} of the 2 power it needs. Cancel the job to free Mira, then inspect cooling to check whether heat is limiting the system.</p><button class="primary" data-guided-cancel="science">Cancel sample observation ↗</button>`
+          : triedSample
+            ? '<p>Mira is free again. Have her inspect cooling. An inspection reveals condition without changing the equipment.</p><button class="primary" data-guided="inspect:cooling">Inspect cooling with Mira ↗</button>'
+            : `<p>First, try adding a Europa observation. The live load check predicts ${test.delivered} power for ${test.requested} requested. Scheduling a job is reversible until you run the period.</p><button class="primary" data-guided="science">Schedule a sample observation ↗</button>`;
+      return `<section class="panel eng-first-step"><p class="eyebrow">GUIDED FIRST PERIOD · STEP ${finding ? '3' : triedSample && !scheduled ? '2' : '1'} OF 3</p><h2>${finding ? 'Decide when to repair.' : triedSample && !scheduled ? 'Find the cause.' : 'Test the equipment.'}</h2>${body}<p class="microcopy">After this period, use the readings and crew record to choose the next jobs. Reach Callisto on period 5; connect the habitat twice by period 8.</p></section>`;
+    }
     const symptom = test.delivered < test.requested
       ? `A sample research load asks for ${test.requested} power; protection currently supplies ${test.delivered}. A quick test shows a shortfall, but not why.`
       : test.output < test.demand
@@ -169,11 +182,14 @@ export function mountEngineering() {
     const button = (event.target as Element).closest<HTMLButtonElement>('button');
     if (!button || button.disabled) return;
     if (button.dataset.crew) { selectedCrew = button.dataset.crew as CrewId; render(); return; }
+    if (button.dataset.guidedCancel) { state = cancelEngineeringJob(state, button.dataset.guidedCancel as Job); selectedCrew = 'engineer'; message = state.history.at(-1)!.text; render(); return; }
     if (button.dataset.engAction || button.dataset.guided) {
       const action = (button.dataset.engAction || button.dataset.guided) as EngineeringAction;
+      if (button.dataset.guided) selectedCrew = 'engineer';
       const next = takeEngineeringAction(state, selectedCrew, action);
       if (next === state) return;
       state = next;
+      if (action === 'science') triedSample = true;
       message = state.history.at(-1)!.text;
       selectedCrew = ((Object.keys(CREW) as CrewId[]).find(id => state.available[id])) ?? selectedCrew;
       render(); return;
