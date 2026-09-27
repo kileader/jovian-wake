@@ -1,19 +1,10 @@
-import { EVENTS, PROJECTS, QUIET_EVENT } from './content.ts';
-import type { Choice, Effect, GameState, Project, ProjectId, Stat, Stats, VoyageEvent } from './types.ts';
+import { CARDS, CARGO_FAMILIES, CRISES, DEFAULT_MONTHS, EVENTS } from './content.ts';
+import type { CardDefinition, CardId, CardInstance, CardType, ChoiceResolution, Crisis, GameState, LogEntry, PendingChoice, VoyageEvent } from './types.ts';
 
-const STAT_NAMES: Record<Stat, string> = {
-  ship: 'Ship', crew: 'Crew', supplies: 'Supplies', readiness: 'Readiness',
-};
-const BASE_UPKEEP: Partial<Stats> = { ship: -1, crew: -1, supplies: -2 };
-const clamp = (value: number) => Math.max(0, Math.min(100, value));
-const hasProject = (state: GameState, id: ProjectId) => state.completedProjects.includes(id);
-
-// FNV-1a seeds a tiny Mulberry32 generator. Only transitions consume randomness.
+// FNV-1a seeds Mulberry32. Only transitions consume randomness, never rendering.
 function hashSeed(seed: string): number {
   let hash = 2166136261;
-  for (let index = 0; index < seed.length; index++) {
-    hash = Math.imul(hash ^ seed.charCodeAt(index), 16777619);
-  }
+  for (let index = 0; index < seed.length; index++) hash = Math.imul(hash ^ seed.charCodeAt(index), 16777619);
   return hash >>> 0;
 }
 
@@ -25,216 +16,388 @@ function random(state: GameState): number {
   return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
 }
 
+function shuffle<T>(state: GameState, values: T[]): T[] {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index--) {
+    const other = Math.floor(random(state) * (index + 1));
+    [result[index], result[other]] = [result[other], result[index]];
+  }
+  return result;
+}
+
 function copy(state: GameState): GameState {
   return {
     ...state,
-    stats: { ...state.stats },
-    activeProject: state.activeProject ? { ...state.activeProject } : null,
-    completedProjects: [...state.completedProjects],
-    flags: [...state.flags],
-    pending: [...state.pending],
-    seenEvents: [...state.seenEvents],
-    log: [...state.log],
+    deck: [...state.deck], hand: [...state.hand], discard: [...state.discard],
+    inPlay: [...state.inPlay], retired: [...state.retired],
+    eventQueue: [...state.eventQueue], allowedOps: state.allowedOps && [...state.allowedOps],
+    encounter: { ...state.encounter }, crisisResults: [...state.crisisResults], log: [...state.log],
+    pending: state.pending?.kind === 'inspect'
+      ? { ...state.pending, cards: [...state.pending.cards] }
+      : state.pending && { ...state.pending },
   };
 }
 
-export function createGame(seed: string): GameState {
-  return {
-    seed, rng: hashSeed(seed), month: 0, phase: 'ready',
-    stats: { ship: 86, crew: 84, supplies: 86, readiness: 12 },
-    activeProject: null, completedProjects: [], science: 0, flags: [],
-    pending: [], seenEvents: [], currentEventId: null, log: [],
-  };
+function log(state: GameState, kind: LogEntry['kind'], title: string, text: string): void {
+  state.log.push({ month: state.month, kind, title, text });
 }
 
-export function projectById(id: ProjectId): Project {
-  const project = PROJECTS.find((entry) => entry.id === id);
-  if (!project) throw new Error(`Unknown project: ${id}`);
-  return project;
+function instance(state: GameState, id: CardId): CardInstance {
+  return { uid: state.nextUid++, id };
+}
+
+export function cardById(id: CardId): CardDefinition {
+  const card = CARDS.find((entry) => entry.id === id);
+  if (!card) throw new Error(`Unknown card: ${id}`);
+  return card;
+}
+
+export function createGame(seed: string, totalMonths = DEFAULT_MONTHS): GameState {
+  const state: GameState = {
+    seed, rng: hashSeed(seed), nextUid: 1, month: 0,
+    totalMonths: Number.isInteger(totalMonths) && totalMonths > 0 && totalMonths % 3 === 0 ? totalMonths : DEFAULT_MONTHS,
+    phase: 'briefing', deck: [], hand: [], discard: [], inPlay: [], retired: [],
+    ops: 0, buys: 0, work: 0, workGenerated: 0, opsPlayed: 0, pending: null,
+    encounter: { kind: 'cruise' }, eventQueue: [], allowedOps: null, crisisResults: [], log: [],
+  };
+  state.deck = shuffle(state, [
+    ...Array.from({ length: 7 }, () => instance(state, 'crew-shift')),
+    ...Array.from({ length: 3 }, () => instance(state, 'colony-stores')),
+  ]);
+  return state;
 }
 
 export function getCurrentEvent(state: GameState): VoyageEvent | null {
-  if (state.phase !== 'decision') return null;
-  if (state.currentEventId === QUIET_EVENT.id) return QUIET_EVENT;
-  return EVENTS.find((event) => event.id === state.currentEventId) ?? null;
+  const encounter = state.encounter;
+  return encounter.kind === 'event' ? EVENTS.find((event) => event.id === encounter.id) ?? null : null;
 }
 
-function adjustedStats(stats: Partial<Stats>, state?: GameState, category = ''): Partial<Stats> {
-  const adjusted: Partial<Stats> = {};
-  for (const stat of Object.keys(stats) as Stat[]) {
-    let delta = stats[stat] ?? 0;
-    if (state && delta < 0) {
-      if (stat === 'ship' && hasProject(state, 'fabrication')) delta = Math.min(0, delta + 2);
-      if (stat === 'crew') {
-        if (category === 'radiation' && hasProject(state, 'radiation')) delta = Math.ceil(delta / 2);
-        if (category !== 'radiation' && hasProject(state, 'training')) delta = Math.min(0, delta + 2);
-      }
-    }
-    if (delta !== 0) adjusted[stat] = delta;
-  }
-  return adjusted;
+export function getCurrentCrisis(state: GameState): Crisis | null {
+  const encounter = state.encounter;
+  return encounter.kind === 'crisis' ? CRISES.find((crisis) => crisis.id === encounter.id) ?? null : null;
 }
 
-export function monthlyUpkeep(state: GameState): Partial<Stats> {
-  return adjustedStats({ ...BASE_UPKEEP, supplies: hasProject(state, 'agriculture') ? -1 : -2 }, state);
+export function ownedCards(state: GameState): CardInstance[] {
+  return [...state.deck, ...state.hand, ...state.discard, ...state.inPlay, ...(state.pending?.kind === 'inspect' ? state.pending.cards : [])];
 }
 
-function applyStats(state: GameState, deltas: Partial<Stats>): Partial<Stats> {
-  const changes: Partial<Stats> = {};
-  for (const stat of Object.keys(deltas) as Stat[]) {
-    const before = state.stats[stat];
-    state.stats[stat] = clamp(before + (deltas[stat] ?? 0));
-    const actual = state.stats[stat] - before;
-    if (actual !== 0) changes[stat] = actual;
-  }
-  return changes;
+export function getScore(state: GameState): { cargo: number; burdens: number; total: number } {
+  const cargo = ownedCards(state).reduce((sum, card) => sum + (cardById(card.id).type === 'Cargo' ? cardById(card.id).points ?? 0 : 0), 0);
+  const burdens = ownedCards(state).filter((card) => cardById(card.id).type === 'Burden').length;
+  return { cargo, burdens, total: cargo - burdens };
 }
 
-function signed(value: number): string {
-  return value > 0 ? `+${value}` : String(value);
-}
-
-export function describeEffect(effect: Effect, state?: GameState, category = ''): string[] {
-  const stats = adjustedStats(effect.stats ?? {}, state, category);
-  const description = (Object.keys(stats) as Stat[]).map((stat) => `${STAT_NAMES[stat]} ${signed(stats[stat]!)}`);
-  if (effect.science) description.push(`Europa science ${signed(effect.science)}`);
-  if (effect.delay) description.push(`Project pauses ${effect.delay} ${effect.delay === 1 ? 'month' : 'months'}`);
-  if (effect.followUp) {
-    const { chance = 1, afterMonths } = effect.followUp;
-    description.push(`${chance < 1 ? `${Math.round(chance * 100)}% chance of a follow-up` : 'Follow-up'} in ${afterMonths} months`);
-  }
-  return description;
-}
-
-// Called only on a private transition copy. Log deltas reflect bounds and perks.
-function applyEffect(state: GameState, effect: Effect, category = ''): { changes: Partial<Stats>; notes: string[] } {
-  const changes = applyStats(state, adjustedStats(effect.stats ?? {}, state, category));
-  const notes: string[] = [];
-  if (effect.science) {
-    const before = state.science;
-    state.science = clamp(state.science + effect.science);
-    if (state.science !== before) notes.push(`Europa science ${signed(state.science - before)}.`);
-  }
-  if (effect.delay && state.activeProject) {
-    state.activeProject.delay += effect.delay;
-    notes.push(`Project work pauses for ${effect.delay} ${effect.delay === 1 ? 'month' : 'months'}.`);
-  }
-  if (effect.addFlag && !state.flags.includes(effect.addFlag)) state.flags.push(effect.addFlag);
-  if (effect.removeFlag) state.flags = state.flags.filter((flag) => flag !== effect.removeFlag);
-  if (effect.followUp) {
-    const { eventId, afterMonths, chance = 1 } = effect.followUp;
-    if (chance >= 1 || random(state) < chance) {
-      state.pending.push({ dueMonth: state.month + afterMonths, eventId });
-      state.pending.sort((first, second) => first.dueMonth - second.dueMonth);
-    }
-  }
-  return { changes, notes };
-}
-
-export function availableChoices(state: GameState): Choice[] {
-  const event = getCurrentEvent(state);
-  if (!event) return [];
-  return event.choices.filter((choice) => {
-    if (choice.requiresProject && !hasProject(state, choice.requiresProject)) return false;
-    if (choice.requiresActiveProject && !state.activeProject) return false;
-    if (choice.requiresFlag && !state.flags.includes(choice.requiresFlag)) return false;
-    const cost = adjustedStats(choice.effect.stats ?? {}, state, event.category).supplies ?? 0;
-    return cost >= 0 || state.stats.supplies >= -cost;
+export function getManifest(state: GameState) {
+  const cards = ownedCards(state);
+  return CARGO_FAMILIES.map((family) => {
+    const preserved = cards.filter((card) => cardById(card.id).cargoFamily === family.id);
+    return {
+      ...family, count: preserved.length,
+      points: preserved.reduce((sum, card) => sum + (cardById(card.id).points ?? 0), 0),
+      retired: state.retired.filter((card) => cardById(card.id).cargoFamily === family.id).length,
+      used: state.crisisResults.filter((result) => result.cargoSpent && cardById(result.cargoSpent).cargoFamily === family.id).length,
+    };
   });
 }
 
-function checkFailure(state: GameState): boolean {
-  if (state.stats.ship > 0 && state.stats.crew > 0 && state.stats.supplies > 0) return false;
-  state.phase = 'failed';
-  state.currentEventId = null;
-  return true;
-}
-
-export function startProject(state: GameState, id: ProjectId): GameState {
-  const project = PROJECTS.find((entry) => entry.id === id);
-  if (state.phase !== 'ready' || state.month >= 24 || state.activeProject || hasProject(state, id) || !project) return state;
-  const next = copy(state);
-  next.activeProject = { id, progress: 0, delay: 0 };
-  next.log.push({ month: next.month, kind: 'project', title: `Started ${project.name}`, text: project.description });
-  return next;
-}
-
-function advanceProject(state: GameState): void {
-  if (!state.activeProject) return;
-  const active = state.activeProject;
-  const project = projectById(active.id);
-  if (active.delay > 0) {
-    active.delay--;
-    state.log.push({ month: state.month, kind: 'project', title: `${project.name} paused`, text: 'The team attends to earlier commitments. No project progress this month.' });
-    return;
+// Taking cards never touches in-play cards. The top of the deck is index zero.
+function takeCards(state: GameState, count: number): CardInstance[] {
+  const cards: CardInstance[] = [];
+  for (let index = 0; index < count; index++) {
+    if (!state.deck.length) {
+      if (!state.discard.length) break;
+      state.deck = shuffle(state, state.discard);
+      state.discard = [];
+    }
+    cards.push(state.deck.shift()!);
   }
-  active.progress++;
-  if (active.progress < project.duration) return;
-  state.completedProjects.push(active.id);
-  state.activeProject = null;
-  const { changes, notes } = applyEffect(state, project.completion);
-  state.log.push({ month: state.month, kind: 'project', title: `Completed ${project.name}`, text: [project.benefit, ...notes].join(' '), changes });
+  return cards;
 }
 
-function selectEvent(state: GameState): VoyageEvent {
-  // Due consequences take the single decision slot; a collision waits a month.
-  state.pending.sort((first, second) => first.dueMonth - second.dueMonth);
-  while (state.pending.length && state.pending[0].dueMonth <= state.month) {
-    const pending = state.pending.shift()!;
-    const event = EVENTS.find((entry) => entry.id === pending.eventId);
-    if (!event || (event.requiresFlag && !state.flags.includes(event.requiresFlag))) continue;
-    state.log.push({ month: state.month, kind: 'consequence', title: event.title, text: 'An earlier decision has caught up with the expedition.' });
-    return event;
-  }
-  const eligible = EVENTS.filter((event) => !event.followUpOnly
-    && !state.seenEvents.includes(event.id)
-    && state.month >= (event.minMonth ?? 1)
-    && state.month <= (event.maxMonth ?? 24)
-    && (!event.requiresFlag || state.flags.includes(event.requiresFlag)));
-  if (!eligible.length || random(state) >= 0.7) return QUIET_EVENT;
-  let remaining = random(state) * eligible.reduce((sum, event) => sum + (event.weight ?? 1), 0);
-  for (const event of eligible) {
-    remaining -= event.weight ?? 1;
-    if (remaining < 0) return event;
-  }
-  return eligible[eligible.length - 1];
+function draw(state: GameState, count: number): number {
+  const cards = takeCards(state, count);
+  state.hand.push(...cards);
+  return cards.length;
 }
 
-export function advanceMonth(state: GameState): GameState {
-  if (state.phase !== 'ready' || state.month >= 24) return state;
+function addWork(state: GameState, amount: number): void {
+  state.work += amount;
+  state.workGenerated += amount;
+}
+
+function gainBurden(state: GameState, id: CardId): void {
+  state.discard.push(instance(state, id));
+}
+
+export function beginMonth(state: GameState): GameState {
+  if ((state.phase !== 'briefing' && state.phase !== 'report') || state.pending || state.month >= state.totalMonths) return state;
   const next = copy(state);
   next.month++;
-  const changes = applyStats(next, monthlyUpkeep(next));
-  let scienceNote = '';
-  if (hasProject(next, 'europa')) {
-    const before = next.science;
-    next.science = clamp(next.science + 1);
-    if (next.science !== before) scienceNote = ` Europa science ${signed(next.science - before)}.`;
+  next.ops = 1;
+  next.buys = 1;
+  next.work = 0;
+  next.workGenerated = 0;
+  next.opsPlayed = 0;
+  next.allowedOps = null;
+  next.phase = 'ops';
+  let handSize = 5;
+  let title = 'A month of cruise';
+  let rule = 'Normal operations. Build the expedition’s capabilities.';
+  if (next.month % 3 === 0) {
+    const crisis = CRISES[(next.month / 3 - 1) % CRISES.length];
+    next.encounter = { kind: 'crisis', id: crisis.id };
+    title = crisis.name;
+    rule = `After playing Work, spend ${crisis.workCost} Work, consume 1 ${crisis.cargoFamily} Cargo, or take ${crisis.burdenCount} ${cardById(crisis.burden).name} cards. Then acquire cards.`;
+  } else if (next.month % 3 === 2) {
+    if (!next.eventQueue.length) next.eventQueue = shuffle(next, EVENTS.map((event) => event.id));
+    const id = next.eventQueue.shift()!;
+    const event = EVENTS.find((entry) => entry.id === id)!;
+    next.encounter = { kind: 'event', id };
+    title = event.name;
+    rule = event.rule;
+    if (event.effect.kind === 'short-hand') handSize = event.effect.cards;
+    if (event.effect.kind === 'restricted-ops') {
+      next.allowedOps = shuffle(next, CARDS.filter((card) => card.type === 'Ops').map((card) => card.id)).slice(0, event.effect.available);
+    }
+    if (event.effect.kind === 'discard-or-burden') next.phase = 'event';
+  } else {
+    next.encounter = { kind: 'cruise' };
   }
-  next.log.push({ month: next.month, kind: 'routine', title: 'Cruise operations', text: `Another month of maintenance, exercise, and life support.${scienceNote}`, changes });
-  if (checkFailure(next)) return next;
-  advanceProject(next);
-  if (checkFailure(next)) return next;
-  const event = selectEvent(next);
-  next.currentEventId = event.id;
-  if (event.id !== QUIET_EVENT.id && !next.seenEvents.includes(event.id)) next.seenEvents.push(event.id);
-  next.phase = 'decision';
+  const drawn = draw(next, handSize);
+  log(next, 'turn', title, `${rule} Drew ${drawn} cards. Start with 1 Ops and 1 Buy.`);
+  const event = getCurrentEvent(next);
+  if (event?.effect.kind === 'gain-burden') {
+    gainBurden(next, event.effect.burden);
+    log(next, 'event', event.name, `Gained 1 ${cardById(event.effect.burden).name} in discard. It can be drawn after a reshuffle.`);
+  }
   return next;
 }
 
-export function choose(state: GameState, choiceId: string): GameState {
-  const event = getCurrentEvent(state);
-  const choice = availableChoices(state).find((entry) => entry.id === choiceId);
-  if (!event || !choice) return state;
-  const next = copy(state);
-  const { changes, notes } = applyEffect(next, choice.effect, event.category);
-  const outcome = [choice.outcome, ...notes].join(' ');
-  next.log.push({ month: next.month, kind: 'choice', title: `${event.title}: ${choice.label}`, text: outcome, changes });
-  if (event.followUpOnly) {
-    const index = next.log.findIndex((entry) => entry.kind === 'consequence' && entry.month === next.month && entry.title === event.title);
-    if (index >= 0) next.log[index] = { ...next.log[index], text: outcome, changes };
+export function canPlayCard(state: GameState, uid: number): boolean {
+  if (state.pending) return false;
+  const held = state.hand.find((card) => card.uid === uid);
+  if (!held) return false;
+  const card = cardById(held.id);
+  return (card.type === 'Ops' && state.phase === 'ops' && state.ops > 0)
+    || (card.type === 'Work' && state.phase === 'work');
+}
+
+export function canAcquire(state: GameState, id: CardId, maxCost = Infinity, requiredType?: CardType): boolean {
+  const card = CARDS.find((entry) => entry.id === id);
+  return !!card && card.type !== 'Burden' && card.cost <= maxCost
+    && (!requiredType || card.type === requiredType)
+    && (card.type !== 'Ops' || state.allowedOps === null || state.allowedOps.includes(id));
+}
+
+export function canBuyCard(state: GameState, id: CardId): boolean {
+  return state.phase === 'buy' && !state.pending && state.buys > 0 && canAcquire(state, id, state.work);
+}
+
+function offerGain(state: GameState, source: CardId, maxCost: number, requiredType?: CardType): void {
+  if (CARDS.some((card) => canAcquire(state, card.id, maxCost, requiredType))) {
+    state.pending = { kind: 'gain', source, maxCost, ...(requiredType ? { requiredType } : {}) };
+  } else {
+    log(state, 'card', cardById(source).name, 'No eligible card is available this month. Continue without gaining a card.');
   }
-  next.currentEventId = null;
-  if (!checkFailure(next)) next.phase = next.month >= 24 ? 'arrived' : 'ready';
+}
+
+function applySpecial(state: GameState, card: CardDefinition): void {
+  switch (card.effect?.special) {
+    case 'retire':
+      if (state.hand.length) state.pending = { kind: 'retire', source: card.id, min: 0, max: Math.min(4, state.hand.length) };
+      break;
+    case 'salvage':
+      if (state.hand.length) state.pending = { kind: 'retire', source: card.id, min: 0, max: 1, bonusCargoWork: 2 };
+      break;
+    case 'upgrade':
+      if (state.hand.length) state.pending = { kind: 'retire', source: card.id, min: 1, max: 1, upgrade: true };
+      else log(state, 'card', card.name, 'No card remains in hand to retire and upgrade.');
+      break;
+    case 'gain-ops':
+      offerGain(state, card.id, 4, 'Ops');
+      break;
+    case 'discard-redraw':
+      if (state.hand.length) state.pending = { kind: 'discard', source: card.id, min: 0, max: state.hand.length, redraw: true };
+      break;
+    case 'inspect': {
+      const cards = takeCards(state, 2);
+      if (cards.length) state.pending = { kind: 'inspect', source: card.id, cards };
+      else log(state, 'card', card.name, 'No cards remain in the deck or discard to inspect.');
+      break;
+    }
+  }
+}
+
+export function playCard(state: GameState, uid: number): GameState {
+  if (!canPlayCard(state, uid)) return state;
+  const next = copy(state);
+  const index = next.hand.findIndex((card) => card.uid === uid);
+  const played = next.hand.splice(index, 1)[0];
+  const card = cardById(played.id);
+  next.inPlay.push(played);
+  if (card.type === 'Ops') {
+    next.ops--;
+    next.opsPlayed++;
+  }
+  const effect = card.effect ?? {};
+  next.ops += effect.ops ?? 0;
+  next.buys += effect.buys ?? 0;
+  addWork(next, effect.work ?? 0);
+  const drawn = draw(next, effect.draw ?? 0);
+  const effects = [
+    ...(effect.draw ? [`drew ${drawn}`] : []),
+    ...(effect.ops ? [`+${effect.ops} Ops`] : []),
+    ...(effect.work ? [`+${effect.work} Work`] : []),
+    ...(effect.buys ? [`+${effect.buys} Buy`] : []),
+  ];
+  log(next, 'card', `Played ${card.name}`, effects.length ? `${effects.join(' · ')}.` : card.text);
+  applySpecial(next, card);
+  return next;
+}
+
+export function playAllWork(state: GameState): GameState {
+  if (state.phase !== 'work' || state.pending) return state;
+  return state.hand.filter((card) => cardById(card.id).type === 'Work').reduce((next, card) => playCard(next, card.uid), state);
+}
+
+export function advancePhase(state: GameState): GameState {
+  if (state.pending || (state.phase !== 'ops' && state.phase !== 'work')) return state;
+  return { ...state, phase: state.phase === 'ops' ? 'work' : getCurrentCrisis(state) ? 'crisis' : 'buy' };
+}
+
+export function resolveCrisis(state: GameState, response: 'work' | 'cargo' | 'defer', cargoId?: CardId): GameState {
+  const crisis = getCurrentCrisis(state);
+  if (state.phase !== 'crisis' || state.pending || !crisis || state.crisisResults.some((result) => result.month === state.month)) return state;
+  if (response === 'work' && state.work < crisis.workCost) return state;
+  if (response === 'cargo' && (!cargoId || cardById(cargoId).cargoFamily !== crisis.cargoFamily || !ownedCards(state).some((card) => card.id === cargoId))) return state;
+  if (!['work', 'cargo', 'defer'].includes(response)) return state;
+  const next = copy(state);
+  let text = '';
+  if (response === 'work') {
+    next.work -= crisis.workCost;
+    text = `${crisis.workText} Spent ${crisis.workCost} Work; ${next.work} remains for acquisitions.`;
+  } else if (response === 'cargo') {
+    // Prefer an accessible copy; identical cards within a zone are interchangeable.
+    for (const zone of [next.hand, next.discard, next.deck, next.inPlay]) {
+      const index = zone.findIndex((card) => card.id === cargoId);
+      if (index < 0) continue;
+      next.retired.push(...zone.splice(index, 1));
+      break;
+    }
+    const cargo = cardById(cargoId!);
+    text = `${crisis.cargoText} Consumed 1 ${cargo.name}; it leaves the deck permanently and forfeits ${cargo.points} arrival points.`;
+  } else {
+    for (let index = 0; index < crisis.burdenCount; index++) gainBurden(next, crisis.burden);
+    text = `${crisis.deferText} Gained ${crisis.burdenCount} ${cardById(crisis.burden).name} cards in discard.`;
+  }
+  next.crisisResults.push({
+    month: next.month, id: crisis.id, response,
+    workSpent: response === 'work' ? crisis.workCost : 0,
+    cargoSpent: response === 'cargo' ? cargoId! : null,
+    burdensAdded: response === 'defer' ? crisis.burdenCount : 0,
+  });
+  next.phase = 'buy';
+  log(next, 'crisis', crisis.name, text);
+  return next;
+}
+
+export function buyCard(state: GameState, id: CardId): GameState {
+  if (!canBuyCard(state, id)) return state;
+  const next = copy(state);
+  const card = cardById(id);
+  next.work -= card.cost;
+  next.buys--;
+  next.discard.push(instance(next, id));
+  log(next, 'purchase', `Bought ${card.name}`, `Spent ${card.cost} Work and 1 Buy. The card goes to discard.`);
+  return next;
+}
+
+export function respondToEvent(state: GameState, response: 'discard' | 'burden'): GameState {
+  const event = getCurrentEvent(state);
+  if (state.phase !== 'event' || state.pending || event?.effect.kind !== 'discard-or-burden') return state;
+  const effect = event.effect;
+  if (response === 'discard') {
+    const eligible = state.hand.filter((card) => !effect.cardType || cardById(card.id).type === effect.cardType);
+    if (eligible.length < effect.count) return state;
+    return { ...state, pending: { kind: 'discard', source: 'event', min: effect.count, max: effect.count, redraw: false, ...(effect.cardType ? { requiredType: effect.cardType } : {}) } };
+  }
+  if (response !== 'burden') return state;
+  const next = copy(state);
+  gainBurden(next, effect.burden);
+  next.phase = 'ops';
+  log(next, 'event', event.name, `Kept the hand and gained ${cardById(effect.burden).name} in discard.`);
+  return next;
+}
+
+function selectedCards(state: GameState, uids: number[], pending: Extract<PendingChoice, { kind: 'retire' | 'discard' }>): CardInstance[] | null {
+  if (uids.length < pending.min || uids.length > pending.max || new Set(uids).size !== uids.length) return null;
+  const cards = uids.map((uid) => state.hand.find((card) => card.uid === uid));
+  if (cards.some((card) => !card)) return null;
+  const found = cards as CardInstance[];
+  if (pending.kind === 'discard' && pending.requiredType && found.some((card) => cardById(card.id).type !== pending.requiredType)) return null;
+  return found;
+}
+
+function names(cards: CardInstance[]): string {
+  return cards.map((card) => cardById(card.id).name).join(', ') || 'none';
+}
+
+export function resolveChoice(state: GameState, resolution: ChoiceResolution): GameState {
+  const pending = state.pending;
+  if (!pending) return state;
+  if (pending.kind === 'gain') {
+    if (resolution.type !== 'gain' || !canAcquire(state, resolution.cardId, pending.maxCost, pending.requiredType)) return state;
+    const next = copy(state);
+    next.pending = null;
+    next.discard.push(instance(next, resolution.cardId));
+    log(next, 'purchase', `Gained ${cardById(resolution.cardId).name}`, `${cardById(pending.source).name} added this card to discard without spending Work or a Buy.`);
+    return next;
+  }
+  if (pending.kind === 'inspect') {
+    if (resolution.type !== 'inspect') return state;
+    const all = [...resolution.retire, ...resolution.discard, ...resolution.keep];
+    if (all.length !== pending.cards.length || new Set(all).size !== all.length || all.some((uid) => !pending.cards.some((card) => card.uid === uid))) return state;
+    const ordered = (uids: number[]) => uids.map((uid) => pending.cards.find((card) => card.uid === uid)!);
+    const retired = ordered(resolution.retire);
+    const discarded = ordered(resolution.discard);
+    const kept = ordered(resolution.keep);
+    const next = copy(state);
+    next.pending = null;
+    next.retired.push(...retired);
+    next.discard.push(...discarded);
+    next.deck = [...kept, ...next.deck];
+    log(next, 'retirement', cardById(pending.source).name, `Retired: ${names(retired)}. Discarded: ${names(discarded)}. Kept on top, first to last: ${names(kept)}.`);
+    return next;
+  }
+  if (resolution.type !== 'cards') return state;
+  const selected = selectedCards(state, resolution.uids, pending);
+  if (!selected) return state;
+  const next = copy(state);
+  next.pending = null;
+  next.hand = next.hand.filter((card) => !resolution.uids.includes(card.uid));
+  if (pending.kind === 'retire') {
+    next.retired.push(...selected);
+    const bonus = (pending.bonusCargoWork ?? 0) * selected.filter((card) => cardById(card.id).type === 'Cargo').length;
+    addWork(next, bonus);
+    log(next, 'retirement', cardById(pending.source).name, `Retired: ${names(selected)}.${bonus ? ` Gained ${bonus} Work for retiring Cargo.` : ''}`);
+    if (pending.upgrade) offerGain(next, pending.source, cardById(selected[0].id).cost + 2);
+  } else {
+    next.discard.push(...selected);
+    const drawn = pending.redraw ? draw(next, selected.length) : 0;
+    if (pending.source === 'event') next.phase = 'ops';
+    log(next, pending.source === 'event' ? 'event' : 'card', pending.source === 'event' ? getCurrentEvent(next)!.name : cardById(pending.source).name, `Discarded: ${names(selected)}.${pending.redraw ? ` Drew ${drawn} replacements.` : ''}`);
+  }
+  return next;
+}
+
+export function endMonth(state: GameState): GameState {
+  if (state.phase !== 'buy' || state.pending) return state;
+  if (getCurrentCrisis(state) && !state.crisisResults.some((result) => result.month === state.month)) return state;
+  const next = copy(state);
+  next.discard.push(...next.hand, ...next.inPlay);
+  next.hand = [];
+  next.inPlay = [];
+  next.phase = next.month >= next.totalMonths ? 'arrived' : 'report';
+  log(next, 'turn', 'Month complete', `Generated ${next.workGenerated} Work; ${next.work} unspent. Played ${next.opsPlayed} Ops cards. Cards in hand and in play moved to discard.`);
   return next;
 }
