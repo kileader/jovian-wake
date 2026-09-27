@@ -8,9 +8,9 @@ import type { CaseId, CrewId, EngineeringAction, EngineeringState, Job, SystemId
 
 const h = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const systemPurpose: Record<SystemId, string> = {
-  power: 'Feeds the bus. Limited output leaves less power for recycling and project work.',
-  cooling: 'Rejects equipment heat. Protected operation limits the bus to what cooling can sustain.',
-  recycler: 'Recycles crew supplies. Any shortfall draws down the finite reserve.',
+  power: 'Makes electricity for the other equipment. Weak output leaves less for recycling and research.',
+  cooling: 'Removes equipment heat. If it cannot keep up, the system limits electricity to protect itself.',
+  recycler: 'Turns used supplies into what the crew needs. A shortfall draws down the stores.',
 };
 
 export function mountEngineering() {
@@ -32,7 +32,7 @@ export function mountEngineering() {
     revealedAt = fullInfo ? 1 : null;
     selectedCrew = 'engineer';
     logOpen = false;
-    message = 'Watch 1 is ready. Read the meters and choose an assignment.';
+    message = '';
     const url = new URL(location.href);
     url.searchParams.set('case', caseId);
     history.replaceState(null, '', url);
@@ -44,10 +44,10 @@ export function mountEngineering() {
   }
 
   function briefing() {
-    return `<main class="eng-shell"><section class="eng-brief panel"><p class="eyebrow">ENGINEERING EXPERIMENT / EIGHT WATCHES</p><h1>What survives<br>the crossing.</h1><p class="eng-lead">The same machinery carries you to Callisto and keeps the first habitat alive. Its history comes with it.</p>
-      <div class="eng-brief-grid"><div><h2>Your assignment</h2><p>Operate a transportable power, cooling, and recycling package through four cruise watches and four surface watches. Commission the habitat connection twice after arrival. Finish with recycling meeting demand and at least one reserve supply.</p><p>Europa observations are optional. Pursuing them competes for the same crew and capacity.</p></div><div><h2>Read. Investigate. Decide.</h2><p>Assign Mira and Alex once each per watch. Inspections reveal condition immediately; maintenance and repairs take effect now. Project work completes when you run the watch, if it receives enough power.</p><p>Basic meters are always available. Internal wear stays unknown until inspected; records show what was known at the time.</p></div></div>
-      <div class="eng-case-controls"><label for="eng-case">STARTING CASE<select id="eng-case">${CASES.map(id => `<option ${id === caseId ? 'selected' : ''}>${id}</option>`).join('')}</select></label><label class="eng-check"><input id="eng-info" type="checkbox" ${fullInfo ? 'checked' : ''}> Show true condition throughout</label><button class="primary" data-ui="start">Begin experiment ↗</button></div>
-      <p class="microcopy">Four fixed cases, including a healthy starting package. Replaying a case reproduces its starting conditions. These are abstract operating periods, not a trajectory or thermodynamic model. Reloading starts over.</p>
+    return `<main class="eng-shell"><section class="eng-brief panel"><p class="eyebrow">A SHORT GAME TEST / FINAL APPROACH</p><h1>Keep the crew<br>supplied.</h1><p class="eng-lead">This is an eight-period test for a possible Jovian Wake game. You're approaching Callisto. Keep the expedition's power and recycling equipment working through the crossing. Then use that same equipment to connect the first habitat.</p>
+      <div class="eng-brief-grid"><div><h2>Your goal</h2><p>Survive eight work periods without exhausting stores. After landing, connect the habitat twice and finish with enough recycled supplies for the crew. Europa research is optional.</p><p>Some starting conditions have a hidden weak point. Equipment only shows its limits when you ask it to do work.</p></div><div><h2>What you'll do</h2><p>Each period, assign one job to Mira and one to Alex. Inspect to learn more about a system. Service it to improve it a little, or spend a spare part to repair it.</p><p>Research, repairs, and habitat work all use the same limited power. Decide what matters most, then run the period to see the consequences.</p></div></div>
+      <div class="eng-case-controls"><label for="eng-case">STARTING SETUP<select id="eng-case">${CASES.map((id, i) => `<option value="${id}" ${id === caseId ? 'selected' : ''}>Test ${String.fromCharCode(65 + i)}</option>`).join('')}</select></label><label class="eng-check"><input id="eng-info" type="checkbox" ${fullInfo ? 'checked' : ''}> Show actual equipment condition</label><button class="primary" data-ui="start">Start the approach ↗</button></div>
+      <p class="microcopy">The tests replay the same starting conditions. Actual equipment condition stays hidden unless you inspect it or switch on full information.</p>
     </section>${rules()}</main>`;
   }
 
@@ -72,36 +72,55 @@ export function mountEngineering() {
   function systemCard(id: SystemId) {
     const system = state.systems[id];
     const finding = system.finding;
-    const ageText = system.serviceAge >= 2 ? `Service due · age ${system.serviceAge}` : `Service age ${system.serviceAge}`;
-    return `<article class="eng-system panel"><div class="eng-system-head"><span class="eyebrow">U-01 / ${id.toUpperCase()}</span><span class="eng-tag ${system.serviceAge >= 2 ? 'warn' : ''}">${ageText}</span></div><h2>${SYSTEM_NAMES[id]}</h2><p>${systemPurpose[id]}</p>
+    const ageText = system.serviceAge >= 2 ? 'Routine service due' : 'Recently serviced';
+    const shortName = id === 'power' ? 'Power unit · electricity' : id === 'cooling' ? 'Cooling loop · heat' : 'Recycling unit · crew supplies';
+    const actionName = id === 'power' ? 'power unit' : id === 'cooling' ? 'cooling loop' : 'recycling unit';
+    return `<article class="eng-system panel"><div class="eng-system-head"><span class="eyebrow">UTILITY PACK / ${id.toUpperCase()}</span><span class="eng-tag ${system.serviceAge >= 2 ? 'warn' : ''}">${ageText}</span></div><h2>${shortName}</h2><p>${systemPurpose[id]}</p>
       <div class="eng-finding">${fullInfo ? `<strong>True condition: ${system.wear}/9 wear · ${wearBand(system.wear)}</strong>` : '<strong>Internal condition requires inspection</strong>'}
       <span>${finding ? `Last finding: ${finding.wear !== null ? `${finding.wear}/9 wear` : finding.band} · watch ${finding.turn}, at inspection time` : 'No inspection on record.'}</span>${finding ? '<small>Later work and operation can change condition.</small>' : ''}${system.repaired ? '<span class="warn">Repair testing: reduced capacity this watch.</span>' : ''}</div>
-      <div class="eng-system-actions">${actionButton(`inspect:${id}`, 'Inspect', 'Immediate evidence · 1 assignment')}${actionButton(`maintain:${id}`, 'Service', 'Remove up to 1 wear · reset service clock')}${actionButton(`repair:${id}`, 'Repair', '1 spare · reduced capacity this watch')}</div></article>`;
+      <div class="eng-system-actions">${actionButton(`inspect:${id}`, `Inspect ${actionName}`, 'Find the cause · uses 1 crew')}${actionButton(`maintain:${id}`, 'Routine service', 'Small improvement · no spare used')}${actionButton(`repair:${id}`, 'Repair with spare', 'Larger repair · lower output this period')}</div></article>`;
+  }
+
+  function firstWatchGuide() {
+    if (state.turn !== 1) return '';
+    const scienceIndex = state.jobs.findIndex(job => job.kind === 'science');
+    const scheduled = scienceIndex >= 0;
+    const test = scheduled ? getReadings(state) : getReadings({ ...state, jobs: [{ kind: 'science', crew: 'engineer' }] });
+    const symptom = test.delivered < test.requested
+      ? `A sample research load asks for ${test.requested} power; protection currently supplies ${test.delivered}. A quick test shows a shortfall, but not why.`
+      : test.output < test.demand
+        ? `Under a sample load, the recycler produces ${test.output} units; a Callisto crew will need ${test.demand}. Stores cover shortfalls for a while.`
+        : `The sample load meets today's needs. Callisto will draw more power and need ${test.demand} recycled units each period.`;
+    return `<section class="panel eng-first-step"><p class="eyebrow">${scheduled ? 'LOAD TEST / CHECK THE RESULT' : 'YOUR FIRST MOVE / TRY A LOAD TEST'}</p><h2>${scheduled ? 'Can the equipment handle it?' : 'Put the equipment to work.'}</h2><p>${symptom} ${scheduled ? 'Look at the readings below. Change the power priority or cancel the job before you run the period.' : 'Assign a crew member to schedule a Europa observation. The live meter predicts whether it can finish; you can cancel it before running the period.'}</p>${scheduled ? `<p class="eng-test-result">Sample observation: <strong>${test.jobPower[scienceIndex]} of 2 power${test.jobPower[scienceIndex] === 2 ? ' · will finish' : ' · will stall'}</strong></p>` : '<button class="primary" data-guided="science">Schedule a sample observation ↗</button>'}<p class="microcopy">The observation is optional; using it here is just a clear first test.</p></section>`;
+  }
+
+  function objectiveBar() {
+    return `<section class="eng-objective" aria-label="Mission objective"><strong>MISSION</strong><span>Keep stores above zero</span><i>→</i><span>Connect habitat twice after landing</span><i>→</i><span>Meet crew supply needs</span></section>`;
   }
 
   function readingsPanel() {
     const r = getReadings(state);
     return `<section class="eng-telemetry" aria-label="Live load check">
-      <article class="panel"><span class="eyebrow">BUS DELIVERY / REQUEST</span><strong>${r.delivered}<small> / ${r.requested}</small></strong><p>${r.delivered < r.requested ? 'Some demand is unmet. Capacity or protective limiting may be responsible.' : 'The bus meets the current requested load.'}</p></article>
-      <article class="panel"><span class="eyebrow">THERMAL TELEMETRY</span><strong class="eng-reading-word ${r.thermalStress ? 'warn' : ''}">${r.thermalStress ? 'Above limit' : 'Within limit'}</strong><p>${r.thermalStress ? 'This load will add cooling wear. Reduce demand or restore protection.' : 'Protection can reduce bus output to keep temperature within limits.'}</p></article>
-      <article class="panel"><span class="eyebrow">RECYCLING / CREW NEED</span><strong>${r.output}<small> / ${r.demand}</small></strong><p>${r.reserveUse ? `Consumes ${r.reserveUse} reserve ${r.reserveUse === 1 ? 'supply' : 'supplies'} this watch. ${r.unmetDemand ? ` Stores cannot cover ${r.unmetDemand} additional supply demand.` : ' Investigate inputs and recycler condition.'}` : 'Crew needs are met at the current load.'}</p></article>
+      <article class="panel"><span class="eyebrow">ELECTRICITY / LOAD</span><strong>${r.delivered}<small> / ${r.requested}</small></strong><p>${r.delivered < r.requested ? 'The planned work needs more electricity than the equipment can supply.' : 'Enough electricity for the current plan.'}</p></article>
+      <article class="panel"><span class="eyebrow">HEAT CHECK</span><strong class="eng-reading-word ${r.thermalStress ? 'warn' : ''}">${r.thermalStress ? 'Too hot' : 'Within limit'}</strong><p>${r.thermalStress ? 'This load will add wear to cooling. Lower the load or override protection.' : 'Protected operation reduces output to control heat.'}</p></article>
+      <article class="panel"><span class="eyebrow">RECYCLING / CREW NEED</span><strong>${r.output}<small> / ${r.demand}</small></strong><p>${r.reserveUse ? `Stores cover ${r.reserveUse} short ${r.reserveUse === 1 ? 'supply' : 'supplies'} this period. ${r.unmetDemand ? ` Another ${r.unmetDemand} ${r.unmetDemand === 1 ? 'need is' : 'needs are'} uncovered.` : ''}` : 'Recycling covers what the crew needs.'}</p></article>
     </section>`;
   }
 
   function controls() {
     const r = getReadings(state);
-    return `<section class="panel eng-operations" aria-labelledby="eng-operation-title"><div><p class="eyebrow">OPERATING SETTINGS</p><h2 id="eng-operation-title">Choose what gets the margin.</h2></div>
-      <label for="eng-mode">CAPACITY LIMITS<select id="eng-mode"><option value="protected" ${state.mode === 'protected' ? 'selected' : ''}>Protected</option><option value="override" ${state.mode === 'override' ? 'selected' : ''}>Override limits</option></select></label>
-      <label for="eng-priority">AFTER BASE LOADS<select id="eng-priority"><option value="life" ${state.priority === 'life' ? 'selected' : ''}>Life support first</option><option value="projects" ${state.priority === 'projects' ? 'selected' : ''}>Projects first</option></select></label>
-      <p class="eng-operation-note">${state.mode === 'override' ? 'Override can increase output. Exceeding power or cooling capacity adds wear.' : 'Protection limits output to available power and cooling capacity.'} Settings carry into the next watch.</p></section>
+    return `${firstWatchGuide()}<section class="panel eng-operations" aria-labelledby="eng-operation-title"><div><p class="eyebrow">OPERATING SETTINGS</p><h2 id="eng-operation-title">Who gets electricity first?</h2></div>
+      <label for="eng-mode">SAFEGUARD<select id="eng-mode"><option value="protected" ${state.mode === 'protected' ? 'selected' : ''}>Protect the equipment</option><option value="override" ${state.mode === 'override' ? 'selected' : ''}>Override limits · add wear</option></select></label>
+      <label for="eng-priority">WHEN POWER IS SHORT<select id="eng-priority"><option value="life" ${state.priority === 'life' ? 'selected' : ''}>Recycling first</option><option value="projects" ${state.priority === 'projects' ? 'selected' : ''}>Projects first</option></select></label>
+      <p class="eng-operation-note">${state.mode === 'override' ? 'Override gives you more power now. Running past a limit wears that equipment faster.' : 'Protection keeps heat in check but may reduce available power.'} These settings last until you change them.</p></section>
       ${readingsPanel()}
-      <section class="eng-crew panel" aria-label="Choose crew member"><div><p class="eyebrow">ASSIGN A CREW MEMBER</p><p>Inspections and equipment work happen immediately. Projects run at watch's end.</p></div><div class="eng-crew-options">${(Object.keys(CREW) as CrewId[]).map(id => `<button class="eng-person ${selectedCrew === id ? 'selected' : ''}" data-crew="${id}" aria-pressed="${selectedCrew === id}" ${state.available[id] ? '' : 'disabled'}><strong>${CREW[id].name}</strong><span>${CREW[id].role} · ${state.available[id] ? 'Ready' : 'Assigned'}</span><small>${id === 'engineer' ? 'Exact inspections · repair up to 4 wear' : 'Condition bands · repair up to 2 wear'}</small></button>`).join('')}</div></section>
+      <section class="eng-crew panel" aria-label="Choose crew member"><div><p class="eyebrow">ASSIGN A CREW MEMBER</p><p>Each gets one job per period. Mira can pinpoint a fault; Alex can tell you roughly how worn it is.</p></div><div class="eng-crew-options">${(Object.keys(CREW) as CrewId[]).map(id => `<button class="eng-person ${selectedCrew === id ? 'selected' : ''}" data-crew="${id}" aria-pressed="${selectedCrew === id}" ${state.available[id] ? '' : 'disabled'}><strong>${CREW[id].name}</strong><span>${CREW[id].role} · ${state.available[id] ? 'Available' : 'Working'}</span><small>${id === 'engineer' ? 'Finds exact condition' : 'Finds general condition'}</small></button>`).join('')}</div></section>
       <section class="eng-systems" aria-label="Equipment and inspections">${SYSTEMS.map(systemCard).join('')}</section>
       <section class="panel eng-projects"><div class="eng-section-heading"><div><p class="eyebrow">MISSION & WORKSHOP</p><h2>Keep something moving.</h2></div><p>Each project needs 1 crew assignment and 2 power at watch's end.</p></div><div class="eng-project-buttons">
-      ${actionButton('fabricate', 'Fabricate spares', '1 feedstock → 2 spares on completion')}
-      ${actionButton('commission', `Connect habitat · ${state.habitat}/2`, 'Two completions needed after arrival')}
-      ${actionButton('science', 'Observe Europa', '+1 observation · optional mission work')}</div>
-      <div class="eng-queue" aria-label="Scheduled project work">${state.jobs.length ? `<h3>Scheduled work · allocated in this order</h3>${state.jobs.map((job, i) => `<div><span><strong>${h(jobName(job.kind))}</strong><small>${CREW[job.crew].name} · ${r.jobPower[i]}/2 power · ${r.jobPower[i] === 2 ? 'will complete' : 'will stall at this load'}</small></span><button class="text-button" data-cancel-job="${job.kind}">Cancel</button></div>`).join('')}` : '<p>No project work scheduled. Inspect, service, repair, or choose a project above.</p>'}</div></section>
+      ${actionButton('fabricate', 'Make spare parts', 'Use 1 raw material to make 2 spares')}
+      ${actionButton('commission', `Connect habitat · ${state.habitat}/2`, 'Available after landing · do this twice')}
+      ${actionButton('science', 'Observe Europa', 'Optional powered research')}</div>
+      <div class="eng-queue" aria-label="Scheduled project work">${state.jobs.length ? `<h3>Scheduled jobs · run in this order</h3>${state.jobs.map((job, i) => `<div><span><strong>${h(jobName(job.kind))}</strong><small>${CREW[job.crew].name} · ${r.jobPower[i]}/2 power · ${r.jobPower[i] === 2 ? 'will complete' : 'will stall at this load'}</small></span><button class="text-button" data-cancel-job="${job.kind}">Cancel</button></div>`).join('')}` : '<p>Each job uses 1 crew assignment and 2 power. Equipment service happens right away; other jobs run when you finish the period.</p>'}</div></section>
       <section class="eng-run panel"><div><strong>${r.reserveUse ? `${r.reserveUse} reserve supplies will be consumed.` : 'Reserve supplies will hold.'}</strong><p>${Object.values(state.available).filter(Boolean).length} crew ${Object.values(state.available).filter(Boolean).length === 1 ? 'assignment' : 'assignments'} still available. ${state.turn === 4 ? 'Arrival next: base power and recycling demand rise by 1.' : state.turn === 8 ? 'Final watch: complete the habitat and meet recycling demand with reserves remaining.' : 'Running the watch applies loads, completes powered jobs, and ages equipment.'}</p>${r.reserveUse >= state.reserves ? '<p class="warn">This load will exhaust the remaining reserve supplies.</p>' : ''}</div><button class="primary" data-ui="end">Run watch ${state.turn}${state.turn === 4 ? ' & arrive' : ''} ↗</button></section>`;
   }
 
@@ -125,10 +144,11 @@ export function mountEngineering() {
     const previousKey = focused?.id || '';
     const finished = state.status !== 'active';
     app.innerHTML = header() + (!started ? briefing() : `<main class="eng-shell" data-watch="${state.turn}" data-status="${state.status}">
-      <div class="mission-nav"><span>U-01 / ${state.turn < 5 ? 'LATE CRUISE' : 'CALLISTO COMMISSIONING'}</span><span>${h(state.caseId)} · WATCH ${state.turn}/8</span></div>
+      <div class="mission-nav"><span>${state.turn < 5 ? 'ON APPROACH TO CALLISTO' : 'AT CALLISTO / FIRST HABITAT'}</span><span>PERIOD ${state.turn} OF 8</span></div>
       <div class="eng-track" aria-label="Expedition progress">${Array.from({ length: 8 }, (_, i) => `<span class="${i + 1 < state.turn || (finished && i + 1 === state.turn) ? 'passed' : ''} ${i + 1 === state.turn ? 'current' : ''}">${i + 1 === 5 ? '↓ ' : ''}${i + 1}</span>`).join('')}</div>
-      ${finished ? '' : `<section class="eng-intro"><div><p class="eyebrow">${state.turn < 5 ? 'THE LAST CRUISE WATCHES' : 'THE SAME MACHINES. A NEW LOAD.'}</p><h1 id="eng-watch-title" tabindex="-1">${state.turn === 5 ? 'Your history has landed.' : 'Keep the expedition working.'}</h1><p>${state.turn === 5 ? 'The utility package now serves the surface habitat. Base demand and recycling needs have increased; condition and records carry forward.' : 'Check the load, select a crew member, and assign useful work. Readings update as you change the plan.'}</p></div><label class="eng-check"><input id="eng-info" type="checkbox" ${fullInfo ? 'checked' : ''}> Show true condition</label></section>`}
-      <section class="eng-stores" aria-label="Expedition stores">${[['RESERVE SUPPLIES', state.reserves], ['SPARE PARTS', state.spares], ['FEEDSTOCK', state.feedstock], ['HABITAT CONNECTION', `${state.habitat}/2`], ['OBSERVATIONS', state.science]].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join('')}</section>
+      ${finished ? '' : `<section class="eng-intro"><div><p class="eyebrow">${state.turn < 5 ? 'THE LAST FOUR PERIODS BEFORE LANDING' : 'THE SAME EQUIPMENT NOW SUPPORTS A HABITAT'}</p><h1 id="eng-watch-title" tabindex="-1">${state.turn === 5 ? 'Callisto draws more power.' : state.turn === 1 ? 'Find the weak point.' : 'Keep the equipment running.'}</h1><p>${state.turn === 5 ? 'Demand rises with the new habitat connection. Crew, equipment, supplies, and service records all carry forward.' : state.turn === 1 ? 'The load test gives you a symptom. Inspect a system to find out what is limiting it, then decide what work can wait.' : 'Read the current load, use your two crew assignments, and decide what work to run.'}</p></div><label class="eng-check"><input id="eng-info" type="checkbox" ${fullInfo ? 'checked' : ''}> Show actual equipment condition</label></section>`}
+      ${finished ? '' : objectiveBar()}
+      <section class="eng-stores" aria-label="Expedition stores">${[['CREW STORES', state.reserves], ['SPARE PARTS', state.spares], ['RAW MATERIAL', state.feedstock], ['HABITAT', `${state.habitat}/2`], ['RESEARCH', state.science]].map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join('')}</section>
       ${finished ? debrief() : controls()}
       <p class="eng-message" role="status">${h(message)}</p>${historyPanel()}${rules()}<footer><span>JOVIAN WAKE / ENGINEERING EXPERIMENT</span><span>CONDITION BECOMES HISTORY.</span></footer></main>`)
       + `<dialog id="eng-reset-dialog" aria-labelledby="eng-reset-title"><h2 id="eng-reset-title">Start another experiment?</h2><p>This run will be discarded. Its progress is not saved across reloads.</p><div class="eng-debrief-actions"><button class="secondary" data-ui="cancel-reset">Keep playing</button><button class="primary" data-ui="briefing">Choose a case</button></div></dialog>
@@ -149,8 +169,9 @@ export function mountEngineering() {
     const button = (event.target as Element).closest<HTMLButtonElement>('button');
     if (!button || button.disabled) return;
     if (button.dataset.crew) { selectedCrew = button.dataset.crew as CrewId; render(); return; }
-    if (button.dataset.engAction) {
-      const next = takeEngineeringAction(state, selectedCrew, button.dataset.engAction as EngineeringAction);
+    if (button.dataset.engAction || button.dataset.guided) {
+      const action = (button.dataset.engAction || button.dataset.guided) as EngineeringAction;
+      const next = takeEngineeringAction(state, selectedCrew, action);
       if (next === state) return;
       state = next;
       message = state.history.at(-1)!.text;
