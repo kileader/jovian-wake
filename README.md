@@ -27,6 +27,8 @@ Open the URL printed by Vite, normally [localhost:5173](http://127.0.0.1:5173/).
 
 New voyages generate a random seed. The same seed and choices reproduce a run: enter a seed in the briefing, use a `?seed=CALLISTO-01` link, or choose **Replay this seed** after arrival. Explicit seed links preserve their seed on reload; opening the game without a seed generates a fresh one. Reloading starts over; there is no autosave. Older `months` URL parameters are ignored.
 
+Cards animate when dealt, played, acquired, discarded, or retired, with brief Work-gain feedback and quiet interface sounds. Use **Sound on/off** in the header to mute; that preference is remembered across reloads. Motion follows the device's reduced-motion preference. Feedback observes completed transitions and never delays input or changes seeded gameplay.
+
 ```sh
 npm test
 npm run simulate
@@ -130,6 +132,8 @@ src/
   engineering-view.ts  Engineering briefing, controls, telemetry, and debrief
   engineering.css      Responsive experiment layout
   main.ts       Browser rendering and input
+  feedback.ts   Card movement and resource feedback from state changes
+  sound.ts      Synthesized interface sounds and remembered mute preference
   style.css     Dark space theme and responsive layout
   debrief.ts    Read-only voyage and commissioning report
   debrief.css   Responsive expedition report layout

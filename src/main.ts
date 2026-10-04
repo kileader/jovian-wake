@@ -10,8 +10,12 @@ import {
 import type { CardId, CardInstance, Crisis, CrisisResult, GameState } from './types.ts';
 import { actionCost, endColonyWeek, startColony, takeColonyAction } from './colony.ts';
 import type { ColonyAction, ColonyState } from './colony.ts';
+import { createSoundController } from './sound.ts';
+import { createFeedback } from './feedback.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
+const sound = createSoundController();
+const feedback = createFeedback(app, sound);
 const params = new URLSearchParams(location.search);
 const randomSeed = () => `CALLISTO-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase()}`;
 let state = createGame(params.get('seed')?.trim().slice(0, 80) || randomSeed());
@@ -26,6 +30,10 @@ const h = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({ 
 const pad = (n: number) => String(n).padStart(2, '0');
 const active = () => ['event', 'ops', 'work', 'crisis', 'buy'].includes(state.phase);
 const arrow = '<span aria-hidden="true">↗</span>';
+
+function soundButton() {
+  return `<button class="text-button sound-toggle" data-action="sound" aria-label="Sound effects" aria-pressed="${sound.enabled()}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8h3l4-4v12l-4-4H3z"/>${sound.enabled() ? '<path d="M13 7c2 1 2 5 0 6m2-9c4 3 4 9 0 12"/>' : '<path d="m13 7 5 6m0-6-5 6"/>'}</svg><span>Sound ${sound.enabled() ? 'on' : 'off'}</span></button>`;
+}
 
 function hero() {
   return `<section class="hero ${state.month ? 'cruising' : ''}" aria-label="Voyage progress">
@@ -166,7 +174,7 @@ function colonyActionButton(label: string, action: ColonyAction, detail: string)
 
 function renderColony() {
   const c = colony!;
-  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.4</small></span><div class="header-right"><span class="prototype-label">CALLISTO / COMMISSIONING TRIAL</span><button class="text-button" data-action="colony-back">Mission debrief ↗</button></div></header>
+  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.4</small></span><div class="header-right"><span class="prototype-label">CALLISTO / COMMISSIONING TRIAL</span>${soundButton()}<button class="text-button" data-action="colony-back">Mission debrief ↗</button></div></header>
     <main class="colony-screen"><div class="mission-nav"><span>THE FIRST SIX WEEKS</span><span class="seed-display">SEED / ${h(state.seed)}</span></div>
       <section class="colony-hero panel"><p class="eyebrow">WEEK ${c.week} / 6</p><h1 id="dispatch-title" tabindex="-1">Everything needs the same hands.</h1><p>Assign two crew teams and three power units each week. Unused capacity expires. Europa observations begin in week 3.</p></section>
       <div class="colony-stats"><article><span>SHIP RESERVES</span><strong>${c.reserves}</strong><small>Reach zero and the trial ends.</small></article><article><span>SHELTER</span><strong>${c.shelter}/2</strong><small>Habitat Cargo: ${c.cargo.habitat} kits</small></article><article><span>RECYCLER</span><strong>${c.recycler}/2</strong><small>Industry Cargo: ${c.cargo.industry} kits</small></article><article><span>EUROPA DATA</span><strong>${c.science}/4</strong><small>Science Cargo: ${c.cargo.science} kits</small></article></div>
@@ -185,7 +193,7 @@ function pendingPanel() {
   } else if (p.kind === 'inspect') {
     const kept = p.cards.filter(c => (inspection[c.uid] || 'keep') === 'keep');
     if (reverseKept) kept.reverse();
-    body = `<p>Keep returns a card to the top of your deck. Discard sets it aside until a shuffle. Retire removes it permanently and forfeits any Cargo points.</p><div class="inspect-cards">${p.cards.map(c => `<label><strong>${h(cardById(c.id).name)}</strong><small>${h(cardById(c.id).type)} · ${h(cardById(c.id).text)}</small><select data-inspect="${c.uid}" aria-label="Disposition for ${h(cardById(c.id).name)}"><option value="keep" ${(inspection[c.uid] || 'keep') === 'keep' ? 'selected' : ''}>Keep on top</option><option value="discard" ${inspection[c.uid] === 'discard' ? 'selected' : ''}>Discard</option><option value="retire" ${inspection[c.uid] === 'retire' ? 'selected' : ''}>Retire permanently</option></select></label>`).join('')}</div><p class="microcopy">Next draw: ${kept.map(c => h(cardById(c.id).name)).join(' → ') || 'No inspected cards kept'}</p><div class="selection-actions">${kept.length > 1 ? '<button class="secondary" data-action="reverse">Reverse kept order</button>' : ''}<button class="primary" data-action="confirm-inspect">Confirm inspection</button></div>`;
+    body = `<p>Keep returns a card to the top of your deck. Discard sets it aside until a shuffle. Retire removes it permanently and forfeits any Cargo points.</p><div class="inspect-cards">${p.cards.map(c => `<label data-inspect-card="${c.uid}" class="type-${cardById(c.id).type.toLowerCase()}"><strong>${h(cardById(c.id).name)}</strong><small>${h(cardById(c.id).type)} · ${h(cardById(c.id).text)}</small><select data-inspect="${c.uid}" aria-label="Disposition for ${h(cardById(c.id).name)}"><option value="keep" ${(inspection[c.uid] || 'keep') === 'keep' ? 'selected' : ''}>Keep on top</option><option value="discard" ${inspection[c.uid] === 'discard' ? 'selected' : ''}>Discard</option><option value="retire" ${inspection[c.uid] === 'retire' ? 'selected' : ''}>Retire permanently</option></select></label>`).join('')}</div><p class="microcopy">Next draw: ${kept.map(c => h(cardById(c.id).name)).join(' → ') || 'No inspected cards kept'}</p><div class="selection-actions">${kept.length > 1 ? '<button class="secondary" data-action="reverse">Reverse kept order</button>' : ''}<button class="primary" data-action="confirm-inspect">Confirm inspection</button></div>`;
   } else {
     const verb = p.kind === 'retire' ? 'Retire' : 'Discard';
     const quantity = p.min === p.max ? `exactly ${p.min}` : `up to ${p.max}`;
@@ -208,9 +216,9 @@ function handCard(card: CardInstance) {
 
 function handPanel() {
   if (!active()) return '';
-  return `<section class="hand-section" aria-label="Your hand"><div class="hand-title"><h2 tabindex="-1">Your hand <span>${state.hand.length} ${state.hand.length === 1 ? 'card' : 'cards'}</span></h2><span class="microcopy">DRAW ${state.deck.length} · DISCARD ${state.discard.length} · IN PLAY ${state.inPlay.length}</span></div>
+  return `<section class="hand-section" aria-label="Your hand"><div class="hand-title"><h2 tabindex="-1">Your hand <span>${state.hand.length} ${state.hand.length === 1 ? 'card' : 'cards'}</span></h2><div class="hand-zones"><span data-zone="draw">DRAW <b>${state.deck.length}</b></span><span data-zone="discard">DISCARD <b>${state.discard.length}</b></span><span>PLAYED <b>${state.inPlay.length}</b></span></div></div>
     ${pendingPanel()}<div class="hand-cards">${state.hand.length ? state.hand.map(handCard).join('') : '<p class="empty-hand">No cards in hand. Finish the phase when ready.</p>'}</div>
-    ${state.inPlay.length ? `<p class="in-play"><span class="eyebrow">IN PLAY</span> ${state.inPlay.map(c => h(cardById(c.id).name)).join(' · ')}</p>` : ''}</section>`;
+    ${state.inPlay.length ? `<div class="in-play"><span class="eyebrow">IN PLAY</span><div class="played-cards">${state.inPlay.map(c => `<span class="played-card type-${cardById(c.id).type.toLowerCase()}" data-played-card="${c.uid}">${h(cardById(c.id).name)}</span>`).join('')}</div></div>` : ''}</section>`;
 }
 
 function supplyCard(id: CardId) {
@@ -249,7 +257,7 @@ function deckPanel() {
 
 function counters() {
   if (!active()) return '';
-  return `<section class="turn-counters" aria-label="Turn resources">${[['Ops plays left', state.ops], ['Work to spend', state.work], ['Buys remaining', state.buys], ['Arrival points', getScore(state).total]].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}</section>`;
+  return `<section class="turn-counters" aria-label="Turn resources">${[['ops', 'Ops plays left', state.ops], ['work', 'Work to spend', state.work], ['buys', 'Buys remaining', state.buys], ['score', 'Arrival points', getScore(state).total]].map(([key, label, value]) => `<div data-counter="${key}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</section>`;
 }
 
 function purchaseDock() {
@@ -259,10 +267,11 @@ function purchaseDock() {
 }
 
 function render(focus = false) {
+  feedback.clear();
   if (colony && colonyOpen) { renderColony(); if (focus) app.querySelector<HTMLElement>('#dispatch-title')?.focus(); return; }
   const focused = document.activeElement as HTMLElement | null;
   const focusSelector = focused?.dataset.card ? `[data-card="${focused.dataset.card}"]` : focused?.dataset.supply ? `[data-supply="${focused.dataset.supply}"]` : focused?.dataset.inspect ? `[data-inspect="${focused.dataset.inspect}"]` : '';
-  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.4</small></span><div class="header-right"><span class="prototype-label">${state.phase === 'arrived' ? 'MISSION / DEBRIEF' : 'CRUISE / COLONY TRIAL'}</span><button class="text-button" data-action="restart">New voyage ↗</button></div></header>
+  app.innerHTML = `<header class="site-header"><span class="wordmark"><span class="brand-orbit" aria-hidden="true">◉</span> JOVIAN<span>WAKE</span><small>0.4</small></span><div class="header-right"><span class="prototype-label">${state.phase === 'arrived' ? 'MISSION / DEBRIEF' : 'CRUISE / COLONY TRIAL'}</span>${soundButton()}<button class="text-button" data-action="restart">New voyage ↗</button></div></header>
     ${state.phase === 'arrived' ? renderMissionDebrief(state, colony) : `
     <main data-phase="${state.phase}" data-month="${state.month}"><div class="mission-nav"><span>EXPEDITION CONTROL</span><span class="seed-display">SEED / ${h(state.seed)}</span></div>${hero()}${counters()}
     <div class="game-layout deck-layout"><div class="main-column"><section class="dispatch panel" aria-labelledby="dispatch-title">${state.phase === 'briefing' ? briefing() : state.phase === 'report' ? report() : turnPanel()}</section>${handPanel()}</div>${deckPanel()}</div>
@@ -284,14 +293,18 @@ function render(focus = false) {
 
 function update(next: GameState, focus = false) {
   if (next === state) return;
+  const before = state;
+  const views = feedback.capture();
   state = next;
   selected = [];
   inspection = {};
   reverseKept = false;
   render(focus);
+  feedback.show(before, state, views);
 }
 
 function reset(seed: string) {
+  feedback.clear();
   state = createGame(seed.trim().slice(0, 80) || randomSeed());
   colony = null;
   colonyOpen = false;
@@ -311,6 +324,12 @@ function reset(seed: string) {
 app.addEventListener('click', e => {
   const button = (e.target as Element).closest<HTMLButtonElement>('button');
   if (!button || button.disabled) return;
+  if (button.dataset.action === 'sound') {
+    sound.toggle();
+    button.outerHTML = soundButton();
+    app.querySelector<HTMLButtonElement>('[data-action="sound"]')?.focus({ preventScroll: true });
+    return;
+  }
   if (colony && colonyOpen) {
     if (button.dataset.colonyAction) { colony = takeColonyAction(colony, button.dataset.colonyAction as ColonyAction); render(); return; }
     if (button.dataset.action === 'colony-end') { colony = endColonyWeek(colony); colonyOpen = colony.status === 'active'; render(true); window.scrollTo({ top: 0, behavior: 'instant' }); return; }
@@ -382,3 +401,4 @@ app.addEventListener('submit', e => {
 });
 
 render();
+document.addEventListener('visibilitychange', () => { if (document.hidden) feedback.clear(); });
