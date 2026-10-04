@@ -232,7 +232,7 @@ function supplyPanel() {
     <h3 class="catalog-label">Cargo · preserve for arrival or consume during a crisis</h3>
     <div class="supply-cargo">${CARDS.filter(c => c.type === 'Cargo').map(c => supplyCard(c.id)).join('')}</div>
     <h3 class="catalog-label">Ops · build your crew’s routines</h3>
-    <div class="supply-ops">${CARDS.filter(c => c.type === 'Ops').map(c => supplyCard(c.id)).join('')}</div></section>`;
+    <div class="supply-ops">${CARDS.filter(c => c.type === 'Ops').sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name, 'en')).map(c => supplyCard(c.id)).join('')}</div></section>`;
 }
 
 function deckPanel() {
