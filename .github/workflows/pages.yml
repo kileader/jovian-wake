@@ -1,4 +1,4 @@
-name: Publish cruise playtest
+name: Publish Jovian Wake playtest
 
 on:
   push:

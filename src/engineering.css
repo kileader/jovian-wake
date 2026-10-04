@@ -11,6 +11,9 @@
 .eng-brief-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin: 32px 0; padding: 28px 0; border-block: 1px solid var(--line); }
 .eng-brief-grid h2 { margin-bottom: 12px; }
 .eng-brief-grid p + p { margin-top: 10px; }
+.eng-brief-grid ol { margin: 0; padding-left: 21px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.eng-brief-grid li + li { margin-top: 9px; }
+.eng-brief-grid li strong { color: var(--ink); }
 .eng-case-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin: 20px 0; }
 .eng-shell label:not(.eng-check) { display: grid; gap: 8px; font: 10px var(--mono); letter-spacing: 1px; }
 .eng-shell select { font: 13px var(--mono); color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 4px; padding: 12px; min-height: 44px; }

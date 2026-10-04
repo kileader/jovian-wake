@@ -105,6 +105,10 @@ Arrival score = printed points on owned Cargo − number of owned Burdens
 
 Every owned zone counts, including temporarily inspected cards. Retired cards do not count. The Burden penalty keeps final-month deferral consequential. The summary also records the exact crisis responses, Work spent, Cargo preserved and used, and unresolved obligations.
 
+Arrival opens the **Mission Debrief**, an expedition report with the score, preserved and consumed Cargo by family, lost Cargo points, named unresolved Burdens, and a dated record of crisis choices. Cargo retired through Ops is shown separately from Cargo consumed in crises. The report reads existing run state and does not change scoring or simulation rules.
+
+After the optional Callisto trial, the same report includes settlement viability, commissioned systems, remaining reserves and issues, and the opening Europa campaign's observations. You can return to the report during commissioning and resume the trial without losing progress. A retry replaces the current trial record; reloading still resets the run.
+
 ## Six weeks on Callisto
 
 From the arrival manifest, choose **Begin Callisto trial**. Each week gives two crew assignments and three power units. Commission Shelter and Recycler twice each; Habitat and Industry Cargo each save a crew assignment on their matching project. Science Cargo enables one Europa observation in each of weeks 3–6. Issues appear on a fixed schedule, and resolving one costs a crew assignment and one power.
@@ -127,9 +131,12 @@ src/
   engineering.css      Responsive experiment layout
   main.ts       Browser rendering and input
   style.css     Dark space theme and responsive layout
+  debrief.ts    Read-only voyage and commissioning report
+  debrief.css   Responsive expedition report layout
 tests/
   engine.test.ts
   colony.test.ts
+  debrief.test.ts
   engineering.test.ts
 scripts/
   simulate.mjs  Repeatable full-voyage smoke playtests
