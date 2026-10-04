@@ -56,7 +56,7 @@ function finishTurn(state: GameState): GameState {
   return endMonth(state);
 }
 
-function voyage(seed: string, months = 12) {
+function voyage(seed: string, months = 24) {
   let state = createGame(seed, months);
   const encounters: string[] = [];
   for (let month = 1; month <= months; month++) {
@@ -89,7 +89,7 @@ test('a seeded starting deck contains seven Crew Shifts and three Colony Stores'
   const state = createGame('departure');
   assert.equal(state.phase, 'briefing');
   assert.equal(state.month, 0);
-  assert.equal(state.totalMonths, 12);
+  assert.equal(state.totalMonths, 24);
   assert.equal(ownedCards(state).length, 10);
   assert.equal(ownedCards(state).filter((card) => card.id === 'crew-shift').length, 7);
   assert.equal(ownedCards(state).filter((card) => card.id === 'colony-stores').length, 3);

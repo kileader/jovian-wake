@@ -23,9 +23,9 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite, normally [localhost:5173](http://127.0.0.1:5173/). Choose a **12-month** voyage or a **24-month** comparison run. These are compressed turn counts, not trajectory calculations.
+Open the URL printed by Vite, normally [localhost:5173](http://127.0.0.1:5173/). The voyage lasts **24 monthly turns**. This is a compressed gameplay timescale, not a trajectory calculation.
 
-The same seed, length, and choices reproduce a run. Enter a seed in the briefing or use `?seed=CALLISTO-01&months=24`. Reloading starts over; there is no autosave.
+New voyages generate a random seed. The same seed and choices reproduce a run: enter a seed in the briefing, use a `?seed=CALLISTO-01` link, or choose **Replay this seed** after arrival. Explicit seed links preserve their seed on reload; opening the game without a seed generates a fresh one. Reloading starts over; there is no autosave. Older `months` URL parameters are ignored.
 
 ```sh
 npm test
@@ -144,7 +144,7 @@ scripts/
 
 State is one plain object. Cards have unique identities and occupy one zone each. The engine owns rules and randomness; rendering consumes no randomness. New crises use the existing Work/Cargo/Burden data fields.
 
-Tests protect phase order, crisis payments, Cargo families and retirement, scoring, immutable transitions, card effects, deterministic replay, and arrival at 12 and 24 months. `npm run simulate` runs 200 seeds for each of two builds and three response preferences at both lengths: 2,400 voyages. Pass a smaller or larger count with `npm run simulate -- 50`.
+Tests protect phase order, crisis payments, Cargo families and retirement, scoring, immutable transitions, card effects, deterministic replay, and arrival at 12 and 24 months. `npm run simulate` runs 200 seeds for each of two builds and three response preferences over the standard 24-month voyage: 1,200 voyages. Pass a smaller or larger count with `npm run simulate -- 50`.
 
 The colony tests protect manifest conversion, weekly budgets, issue aging, the Europa observation limit, and a viable six-week route. Voyage simulations still stop at arrival; colony balance needs human playtests.
 
@@ -155,7 +155,7 @@ Useful playtest questions:
 - Did you choose between spending Work, sacrificing Cargo, and accepting a Burden?
 - Did Cargo's family change what you bought or preserved?
 - Did cleanup make problems trivial, or did Burdens overwhelm weak draws?
-- Did 24 months produce new decisions or merely more of the same?
+- Did the second half of the voyage produce new decisions or merely more of the same?
 
 ## Public hosting
 

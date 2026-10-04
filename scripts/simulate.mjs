@@ -1,6 +1,6 @@
 // Deterministic smoke playtests, not estimates of human difficulty or enjoyment.
 import assert from 'node:assert/strict';
-import { CARDS, CRISES } from '../src/content.ts';
+import { CARDS, CRISES, DEFAULT_MONTHS } from '../src/content.ts';
 import {
   advancePhase, beginMonth, buyCard, canAcquire, canBuyCard, canPlayCard, cardById,
   createGame, endMonth, getCurrentCrisis, getCurrentEvent, getScore, ownedCards,
@@ -85,7 +85,7 @@ function run(seed, months, build, response) {
   return state;
 }
 
-for (const months of [12, 24]) {
+for (const months of [DEFAULT_MONTHS]) {
   for (const build of ['work', 'combo']) {
     for (const response of ['work', 'cargo', 'defer']) {
       const sums = { points: 0, burdens: 0, work: 0, cargo: 0, defer: 0 };

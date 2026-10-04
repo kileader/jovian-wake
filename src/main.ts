@@ -13,7 +13,8 @@ import type { ColonyAction, ColonyState } from './colony.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const params = new URLSearchParams(location.search);
-let state = createGame(params.get('seed')?.trim().slice(0, 80) || 'CALLISTO-01', params.get('months') === '24' ? 24 : 12);
+const randomSeed = () => `CALLISTO-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase()}`;
+let state = createGame(params.get('seed')?.trim().slice(0, 80) || randomSeed());
 let colony: ColonyState | null = null;
 let colonyOpen = false;
 let selected: number[] = [];
@@ -24,7 +25,6 @@ let inventoryOpen = false;
 const h = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const pad = (n: number) => String(n).padStart(2, '0');
 const active = () => ['event', 'ops', 'work', 'crisis', 'buy'].includes(state.phase);
-const randomSeed = () => `CALLISTO-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase()}`;
 const arrow = '<span aria-hidden="true">↗</span>';
 
 function hero() {
@@ -47,7 +47,6 @@ function briefing() {
       <li><span>03</span><div><strong>Repeat with new hands.</strong><p>Later, play Ops cards before Work. Every third month, handle a crisis before buying. You can spend Work, use matching Cargo, or take Burdens.</p></div></li>
     </ol>
     <div class="launch-controls"><label class="seed-label" for="launch-seed">VOYAGE SEED<input id="launch-seed" maxlength="80" value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label>
-    <label class="seed-label" for="launch-months">LENGTH<select id="launch-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months · quick test</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months · longer build</option></select></label>
     <button class="primary" data-action="begin">Begin the cruise ${arrow}</button></div>
     <p class="microcopy">Starting deck: 7 Crew Shifts and 3 Colony Stores. No timer. Reloading resets the voyage.</p>
     <p class="microcopy"><a href="?mode=engineering" style="text-decoration: underline">Try the engineering experiment ↗</a> · Eight watches of coupled machinery, diagnosis, and commissioning.</p>`;
@@ -272,7 +271,7 @@ function render(focus = false) {
     <details class="voyage-log" ${logOpen ? 'open' : ''}><summary>VOYAGE LOG <span class="log-count">${state.log.length} ENTRIES</span></summary><div class="log-entries">${[...state.log].reverse().map(e => `<article><span class="log-month">M${pad(e.month)}</span><div><h3>${h(e.title)}</h3><p>${h(e.text)}</p></div></article>`).join('') || '<p>The voyage has yet to begin.</p>'}</div></details>
     <details class="how-to"><summary>Rules & card types</summary><p><strong>Work</strong> generates this month’s purchasing power. <strong>Ops</strong> spends one Ops play and resolves its card text; extra Ops lets you chain cards. <strong>Cargo</strong> scores at arrival and can be permanently consumed for matching crisis responses. It has no normal play effect. <strong>Burden</strong> clogs your draws and costs 1 point at arrival if unresolved.</p><p>Play Ops first, then Work, respond to any crisis, then acquire cards. You cannot return to an earlier phase. Gained cards go to discard. When the draw pile runs out, shuffle the discard pile. Cleanup discards the entire hand and all cards in play; leftover Work, Ops, and Buys expire.</p><p>Retirement permanently removes a card and forfeits its points. Every owned Cargo card scores its printed value; each owned Burden subtracts 1 point. Score includes all owned piles. Every third month brings a choice: spend Work, permanently consume matching Cargo, or accept Burdens. Paying Work reduces what you can buy. Cargo can be taken from any owned pile, using a copy in hand first, then discard, then draw. The 24-month mode repeats the four-crisis sequence. Some events automatically add a Burden after the opening draw. Acquisitions have no supply caps; they represent preparations using equipment already aboard.</p><p>The same seed, length, and choices reproduce a voyage. No saves across reloads. These are deliberately compressed gameplay timescales, not a trajectory simulation. The optional six-week colony trial begins from the arrival manifest; Phase 1 preparation is not implemented.</p></details>
     <footer><span>JOVIAN WAKE <b>/</b> PROTOTYPE 0.4</span><span>THE DISTANCE IS THE TEST.</span></footer></main>${purchaseDock()}`}
-    <dialog id="restart-dialog" aria-labelledby="restart-title"><form id="restart-form"><p class="eyebrow">A DIFFERENT CROSSING</p><h2 id="restart-title">Chart a new voyage.</h2><p>${state.month && state.phase !== 'arrived' ? 'This will end your current run. ' : ''}Use the same seed to replay the same starting conditions.</p><label class="seed-label" for="restart-seed">VOYAGE SEED<input id="restart-seed" maxlength="80" required value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label><label class="seed-label" for="restart-months">LENGTH<select id="restart-months"><option value="12" ${state.totalMonths === 12 ? 'selected' : ''}>12 months</option><option value="24" ${state.totalMonths === 24 ? 'selected' : ''}>24 months</option></select></label><div class="dialog-actions"><button type="button" class="text-button" data-action="random-seed">Generate seed ↺</button><div><button type="button" class="secondary" data-action="cancel-restart">Cancel</button><button type="submit" class="primary">Begin again ↗</button></div></div></form></dialog>`;
+    <dialog id="restart-dialog" aria-labelledby="restart-title"><form id="restart-form"><p class="eyebrow">A DIFFERENT CROSSING</p><h2 id="restart-title">Chart a new voyage.</h2><p>${state.month && state.phase !== 'arrived' ? 'This will end your current run. ' : ''}Use the same seed to replay the same starting conditions.</p><label class="seed-label" for="restart-seed">VOYAGE SEED<input id="restart-seed" maxlength="80" required value="${h(state.seed)}" autocomplete="off" spellcheck="false"></label><div class="dialog-actions"><button type="button" class="text-button" data-action="random-seed">Generate seed ↺</button><div><button type="button" class="secondary" data-action="cancel-restart">Cancel</button><button type="submit" class="primary">Begin again ↗</button></div></div></form></dialog>`;
   app.querySelector<HTMLDetailsElement>('.voyage-log')?.addEventListener('toggle', e => { logOpen = (e.target as HTMLDetailsElement).open; });
   app.querySelector<HTMLDetailsElement>('.inventory')?.addEventListener('toggle', e => { inventoryOpen = (e.target as HTMLDetailsElement).open; });
   if (focus) app.querySelector<HTMLElement>('#dispatch-title')?.focus();
@@ -292,8 +291,8 @@ function update(next: GameState, focus = false) {
   render(focus);
 }
 
-function reset(seed: string, months = state.totalMonths) {
-  state = createGame(seed.trim().slice(0, 80) || 'CALLISTO-01', months);
+function reset(seed: string) {
+  state = createGame(seed.trim().slice(0, 80) || randomSeed());
   colony = null;
   colonyOpen = false;
   selected = [];
@@ -303,7 +302,7 @@ function reset(seed: string, months = state.totalMonths) {
   inventoryOpen = false;
   const url = new URL(location.href);
   url.searchParams.set('seed', state.seed);
-  url.searchParams.set('months', String(state.totalMonths));
+  url.searchParams.delete('months');
   history.replaceState(null, '', url);
   render(true);
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -337,7 +336,7 @@ app.addEventListener('click', e => {
     case 'colony-retry': colony = startColony(state); colonyOpen = true; render(true); window.scrollTo({ top: 0, behavior: 'instant' }); break;
     case 'colony-resume': colonyOpen = true; render(true); window.scrollTo({ top: 0, behavior: 'instant' }); break;
     case 'begin': {
-      if (state.phase === 'briefing') reset(app.querySelector<HTMLInputElement>('#launch-seed')!.value, Number(app.querySelector<HTMLSelectElement>('#launch-months')!.value));
+      if (state.phase === 'briefing') reset(app.querySelector<HTMLInputElement>('#launch-seed')!.value);
       update(beginMonth(state), true);
       break;
     }
@@ -360,7 +359,7 @@ app.addEventListener('click', e => {
       break;
     }
     case 'reverse': reverseKept = !reverseKept; render(); break;
-    case 'restart': dialog.showModal(); break;
+    case 'restart':
     case 'new': dialog.showModal(); app.querySelector<HTMLInputElement>('#restart-seed')!.value = randomSeed(); break;
     case 'replay': reset(state.seed); break;
     case 'cancel-restart': dialog.close(); break;
@@ -379,7 +378,7 @@ app.addEventListener('change', e => {
 app.addEventListener('submit', e => {
   if ((e.target as HTMLElement).id !== 'restart-form') return;
   e.preventDefault();
-  reset(app.querySelector<HTMLInputElement>('#restart-seed')!.value, Number(app.querySelector<HTMLSelectElement>('#restart-months')!.value));
+  reset(app.querySelector<HTMLInputElement>('#restart-seed')!.value);
 });
 
 render();

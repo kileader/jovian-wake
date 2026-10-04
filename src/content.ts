@@ -1,6 +1,6 @@
 import type { CardDefinition, CargoFamily, Crisis, VoyageEvent } from './types.ts';
 
-export const DEFAULT_MONTHS = 12;
+export const DEFAULT_MONTHS = 24;
 export const CARGO_FAMILIES: { id: CargoFamily; name: string; purpose: string }[] = [
   { id: 'habitat', name: 'Habitat', purpose: 'Living space, medical care, and life-support reserves.' },
   { id: 'industry', name: 'Industry', purpose: 'Repairs, spare parts, and local fabrication.' },
