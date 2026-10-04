@@ -2,7 +2,7 @@ name: Publish Jovian Wake playtest
 
 on:
   push:
-    branches: [deckbuilding-prototype]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
