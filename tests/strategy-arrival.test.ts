@@ -3,10 +3,11 @@ import test from 'node:test';
 import {
   advancePhase, beginArrivalTurn, beginMonth, buyCard, canAcquire, canBuyCard,
   commitArrivalWork, createGame, crisisCargoWorkCost, endArrivalTurn, endMonth,
-  getArrivalOutcome, getArrivalRequirements, getCurrentCrisis, getScore, ownedCards,
+  getArrivalDemand, getArrivalOutcome, getArrivalRequirements, getCurrentCrisis, getScore, ownedCards, payArrivalDemand,
   playAllWork, playCard, resolveChoice, resolveCrisis, respondToEvent, useArrivalCargo,
 } from '../src/engine.ts';
 import { arrivalEncounter, renderArrivalDebrief, renderArrivalPanel } from '../src/arrival-view.ts';
+import { ARRIVAL_STAGES } from '../src/content.ts';
 import type { ArrivalState, CardId, CardInstance, GameState } from '../src/types.ts';
 
 function fixture(hand: CardId[] = [], deck: CardId[] = [], discard: CardId[] = [], overrides: Partial<GameState> = {}): GameState {
@@ -32,7 +33,8 @@ function conserved(state: GameState) {
 }
 function arrival(overrides: Partial<ArrivalState> = {}): ArrivalState {
   return { turn: 1, status: 'active', progress: { trajectory: 0, ship: 0, surface: 0 },
-    deployed: [], sacrificed: [], damage: 0, fatigueTax: 0, ...overrides };
+    deployed: [], sacrificed: [], damage: 0, fatigueTax: 0, demandPaid: 0,
+    demands: overrides.status === 'complete' ? ARRIVAL_STAGES.map((stage, index) => ({ turn: index + 1, required: stage.work, paid: stage.work, support: 0, met: true })) : [], ...overrides };
 }
 const arrivalState = (hand: CardId[] = [], overrides: Partial<GameState> = {}) => fixture(hand, [], [], {
   month: 24, phase: 'arrival', arrival: arrival(), ...overrides,
@@ -212,7 +214,8 @@ test('cannibalizing Cargo gives Work, permanently loses the kit, and records ind
   assert.equal(sacrificed.retired[0].uid, 1);
   assert.equal(getScore(sacrificed).cargo, 0);
   assert.match(getArrivalOutcome(sacrificed)!.industry, /Industrial capability lost/);
-  assert.equal(getArrivalOutcome(sacrificed)!.settlement, true);
+  assert.equal(getArrivalOutcome(sacrificed)!.title, 'Jovian Arrival in progress');
+  assert.equal(getArrivalOutcome(sacrificed)!.settlement, false);
   conserved(sacrificed);
 });
 
@@ -251,6 +254,7 @@ test('Arrival commits persistent progress, clears the hand, expires Work, and st
     assert.equal(state.arrival?.turn, turn);
     assert.equal(state.work, 0);
     state = advancePhase(playAllWork(advancePhase(state)));
+    state = payArrivalDemand(state, getArrivalDemand(state).remaining);
     if (turn === 1) {
       assert.equal(commitArrivalWork(state, 'trajectory', 1.5), state);
       assert.equal(commitArrivalWork(state, 'trajectory', 9), state);
@@ -270,12 +274,12 @@ test('Arrival commits persistent progress, clears the hand, expires Work, and st
   assert.equal(endArrivalTurn(state), state);
 });
 
-test('missed stage checkpoints damage the ship and raise both readiness and survival needs', () => {
+test('missed stage operations damage the ship and raise both readiness and survival needs', () => {
   const failed = endArrivalTurn(arrivalState());
   assert.equal(failed.arrival?.damage, 1);
   assert.equal(getArrivalRequirements(failed).minimumShip, 5);
   assert.equal(getArrivalRequirements(failed).targets.ship, 9);
-  const passed = endArrivalTurn(arrivalState([], { arrival: arrival({ progress: { trajectory: 2, ship: 0, surface: 0 } }) }));
+  const passed = endArrivalTurn(payArrivalDemand(arrivalState([], { work: 4 }), 4));
   assert.equal(passed.arrival?.damage, 0);
 });
 
@@ -291,8 +295,9 @@ test('partial endings distinguish loss, stranded survivors, refuge, emergency fo
   }
   let enabled = arrivalState(['industrial-core', 'europa-instruments'], { arrival: arrival({ progress: { trajectory: 8, ship: 8, surface: 6 } }) });
   enabled = useArrivalCargo(useArrivalCargo(enabled, 1, 'deploy'), 2, 'deploy');
-  assert.match(getArrivalOutcome(enabled)!.industry, /activated/);
-  assert.match(getArrivalOutcome(enabled)!.science, /commissioned/);
+  const completed = { ...enabled, arrival: arrival({ turn: 4, status: 'complete', progress: enabled.arrival!.progress, deployed: enabled.arrival!.deployed }) };
+  assert.match(getArrivalOutcome(completed)!.industry, /activated/);
+  assert.match(getArrivalOutcome(completed)!.science, /commissioned/);
   assert.match(getArrivalOutcome(arrivalState(['fatigue', 'crew-conflict', 'medical-followup', 'fatigue', 'medical-followup'], { arrival: arrival({ progress: { trajectory: 0, ship: 4, surface: 0 } }) }))!.crew, /Severe/);
 });
 
@@ -308,6 +313,111 @@ test('arrival views are immutable, escape player input, and show outcomes before
   renderArrivalPanel(state);
   arrivalEncounter({ ...state, phase: 'arrival-ready' });
   assert.equal(JSON.stringify(state), before);
+});
+
+test('stage payment is guarded, separate from readiness, and cannot carry forward or be paid twice', () => {
+  const original = freeze(arrivalState([], { work: 10 }));
+  const before = JSON.stringify(original);
+  for (const amount of [0, -1, 1.5, 5, Number.NaN]) assert.equal(payArrivalDemand(original, amount), original);
+  const workPhase = { ...original, phase: 'work' } as GameState;
+  assert.equal(payArrivalDemand(workPhase, 1), workPhase);
+  const unfunded = { ...original, work: 0 };
+  assert.equal(payArrivalDemand(unfunded), unfunded);
+  const pending = { ...original, pending: { kind: 'retire', source: 'streamlining', min: 0, max: 4 } } as GameState;
+  assert.equal(payArrivalDemand(pending), pending);
+  const paid = payArrivalDemand(original, 4);
+  assert.equal(paid.work, 6);
+  assert.equal(paid.arrival?.demandPaid, 4);
+  assert.deepEqual(paid.arrival?.progress, original.arrival?.progress);
+  assert.equal(payArrivalDemand(paid), paid);
+  const recorded = endArrivalTurn(freeze(paid));
+  assert.deepEqual(recorded.arrival?.demands, [{ turn: 1, required: 4, paid: 4, support: 0, met: true }]);
+  assert.equal(endArrivalTurn(recorded), recorded);
+  const next = beginArrivalTurn(freeze(recorded));
+  assert.equal(next.arrival?.demandPaid, 0);
+  assert.equal(next.work, 0);
+  assert.equal(getArrivalDemand(next).remaining, 5);
+  assert.equal(JSON.stringify(original), before);
+});
+
+test('only deployed matching Cargo supports demands, capped at two across copies and Habitat types', () => {
+  let state = arrivalState(['europa-instruments', 'europa-instruments', 'europa-instruments',
+    'industrial-core', 'industrial-core', 'industrial-core', 'colony-stores', 'habitation-modules', 'habitation-modules']);
+  assert.equal(getArrivalDemand(state).required, 4, 'Cargo in hand does not provide support');
+  for (const card of [...state.hand]) {
+    state = useArrivalCargo(freeze(state), card.uid, 'deploy');
+    if (state.arrival!.deployed.length === 3) {
+      assert.equal(getArrivalDemand({ ...state, arrival: { ...state.arrival!, turn: 2 } }).support, 0, 'Science does not support radiation');
+      assert.equal(getArrivalDemand({ ...state, arrival: { ...state.arrival!, turn: 4 } }).support, 0, 'Undeployed Habitat does not support activation');
+    }
+  }
+  assert.equal(getArrivalDemand(state).required, 2);
+  for (const [turn, required] of [[1, 2], [2, 3], [3, 2], [4, 3]]) {
+    const stage = { ...state, arrival: { ...state.arrival!, turn } };
+    assert.equal(getArrivalDemand(stage).support, 2);
+    assert.equal(getArrivalDemand(stage).required, required);
+    assert.equal(getArrivalDemand(stage).remaining, required, 'Previously deployed Cargo never eliminates fresh Work');
+  }
+  conserved(state);
+});
+
+test('a Cargo burst can complete readiness on turn one but cannot win without later operations', () => {
+  let state = arrivalState(['europa-instruments', 'europa-instruments', 'europa-instruments',
+    'industrial-core', 'industrial-core', 'habitation-modules', 'habitation-modules'], { work: 4 });
+  for (const card of [...state.hand]) state = useArrivalCargo(state, card.uid, 'deploy');
+  state = payArrivalDemand(state, 2);
+  assert.deepEqual(state.arrival?.progress, { trajectory: 9, ship: 11, surface: 10 });
+  assert.equal(getArrivalOutcome(state)?.title, 'Jovian Arrival in progress');
+  state = endArrivalTurn(freeze(state));
+  for (let turn = 2; turn <= 4; turn++) {
+    state = advancePhase(advancePhase(beginArrivalTurn(state)));
+    assert.ok(getArrivalDemand(state).remaining > 0);
+    state = endArrivalTurn(freeze(state));
+  }
+  assert.deepEqual(state.arrival?.demands.map(result => result.met), [true, false, false, false]);
+  assert.equal(getArrivalOutcome(state)?.title, 'Survivors remain in Jovian orbit');
+  assert.equal(getArrivalOutcome(state)?.settlement, false);
+  conserved(state);
+});
+
+test('fresh demand failures change the ending even with ample banked readiness', () => {
+  for (const [missed, title] of [[0, 'Callisto settlement activated'], [1, 'Emergency Callisto foothold'],
+    [2, 'Emergency Callisto foothold'], [3, 'Survivors remain in Jovian orbit'], [4, 'Callisto reached: ship-supported refuge']] as const) {
+    let state = fixture([], Array.from({ length: 8 }, () => 'expert-shift'), [], { month: 24, phase: 'arrival-ready',
+      arrival: arrival({ turn: 0, progress: { trajectory: 20, ship: 20, surface: 20 } }) });
+    for (let turn = 1; turn <= 4; turn++) {
+      state = advancePhase(playAllWork(advancePhase(beginArrivalTurn(state))));
+      if (turn !== missed) state = payArrivalDemand(state, getArrivalDemand(state).remaining);
+      state = endArrivalTurn(freeze(state));
+    }
+    assert.equal(getArrivalOutcome(state)?.title, title);
+    assert.equal(getArrivalOutcome(state)?.shipReady, missed !== 1 && missed !== 2, 'Transfer or activation failures do not erase sufficient ship readiness');
+    assert.equal(state.arrival?.damage, missed > 0 && missed < 4 ? 1 : 0);
+    const html = renderArrivalDebrief(freeze(state));
+    assert.ok(html.includes('Arrival stage operations'));
+    if (missed === 3) assert.ok(html.includes('Callisto transfer demand missed.'));
+    if (missed === 4) assert.ok(html.includes('Surface activation demand missed.'));
+    conserved(state);
+  }
+});
+
+test('a simple Work-heavy deck can meet all four demands and full readiness without Ops or Cargo', () => {
+  let state = fixture([], Array.from({ length: 8 }, () => 'specialist-shift'), [], { month: 24, phase: 'arrival-ready' });
+  for (let turn = 1; turn <= 4; turn++) {
+    state = advancePhase(playAllWork(advancePhase(beginArrivalTurn(state))));
+    state = payArrivalDemand(state, getArrivalDemand(state).remaining);
+    const requirements = getArrivalRequirements(state);
+    for (const [objective, target] of [['ship', requirements.minimumShip], ['trajectory', requirements.targets.trajectory],
+      ['surface', requirements.targets.surface], ['ship', requirements.targets.ship]] as const) {
+      const amount = Math.min(state.work, Math.max(0, target - state.arrival!.progress[objective]));
+      if (amount) state = commitArrivalWork(state, objective, amount);
+    }
+    state = endArrivalTurn(freeze(state));
+    conserved(state);
+  }
+  assert.equal(getArrivalOutcome(state)?.title, 'Callisto settlement activated');
+  assert.deepEqual(state.arrival?.progress, { trajectory: 8, ship: 8, surface: 6 });
+  assert.equal(state.arrival?.demands.reduce((sum, result) => sum + result.paid, 0), 18);
 });
 
 test('debrief lists every remaining card by type and count, including deployed Cargo exactly once', () => {
@@ -364,6 +474,8 @@ test('a complete 24-month cruise and four-turn Arrival replay deterministically 
     for (let turn = 1; turn <= 4; turn++) {
       state = advancePhase(playAllWork(advancePhase(beginArrivalTurn(state))));
       for (const card of [...state.hand]) if (card.id === 'colony-stores') state = useArrivalCargo(state, card.uid, 'sacrifice');
+      const payment = Math.min(state.work, getArrivalDemand(state).remaining);
+      if (payment) state = payArrivalDemand(state, payment);
       const objective = turn === 2 ? 'ship' : turn === 4 ? 'surface' : 'trajectory';
       const amount = Math.min(state.work, Math.max(0, getArrivalRequirements(state).targets[objective] - state.arrival!.progress[objective]));
       if (amount) state = commitArrivalWork(state, objective, amount);

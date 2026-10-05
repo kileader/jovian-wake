@@ -79,20 +79,22 @@ Cargo occupies a cruise hand slot and can resolve a matching crisis from any own
 
 ## Four-turn Jovian Arrival
 
-After Month 24 cleanup, choose **Begin Jovian Arrival**. Continue the actual deck/discard cycle without replacing or reshuffling the deck unnecessarily. Each Arrival turn draws five cards and starts with one Ops, no Buys, and no Work. Play Ops and Work as usual, then allocate Work at one progress per Work. Progress persists across four turns; unused Work expires.
+After Month 24 cleanup, choose **Begin Jovian Arrival**. Continue the actual deck/discard cycle without replacing or reshuffling the deck unnecessarily. Each Arrival turn draws five cards and starts with one Ops, no Buys, and no Work. Play Ops and Work as usual, then spend Work on **this turn's stage demand** and on persistent readiness at one progress per Work. These are separate payments. Readiness carries forward; stage payments and unused Work do not.
 
 Base targets are **Trajectory 8, Ship 8, Surface 6**. Ship progress of **4** is the survival minimum. Full Ship readiness is distinct from crew survival: reaching the other targets with a damaged or incompletely prepared ship can produce an emergency foothold.
 
-| Turn | Stage | Checkpoint before cleanup |
-| --- | --- | --- |
-| 1 | Jupiter approach | Trajectory 2 |
-| 2 | Radiation passage | Ship 3 |
-| 3 | Callisto transfer | Trajectory 6 |
-| 4 | Surface activation | Final objective assessment |
+| Turn | Stage | Fresh Work demand | Supporting deployed Cargo | Missing the demand |
+| --- | --- | ---: | --- | --- |
+| 1 | Jupiter capture | 4 | Science | +1 ship damage; emergency readiness |
+| 2 | Radiation passage | 5 | Industry | +1 ship damage; emergency readiness |
+| 3 | Callisto transfer | 4 | Science | +1 ship damage; survivors remain in orbit |
+| 4 | Surface activation | 5 | Habitat | Ship-supported refuge if Callisto is reached |
 
-A missed checkpoint adds one ship damage, raising both the final Ship target and the survival minimum by one. Objectives represent readiness accumulated across the approach, so any objective can receive Work on any turn. These are compressed gameplay demands, not a physical trajectory or radiation model.
+Each matching deployed kit reduces its stage's demand by **1 Work, capped at 2** across all copies. Deploy before paying to receive the reduction. Previously deployed kits continue to support later matching stages, but every stage still needs fresh Work. Stage demand payments do not add readiness progress. All four demands and the three readiness targets are needed for full activation; meeting the targets on turn 1 cannot complete later operations.
 
-Cargo in hand can **deploy once**, preserve its points and capability, and leave the cycling deck. Alternatively, **cannibalize** it permanently for **3 Work**. Crew Conflict makes deployment cost 1 Work. Preserving equipment enables industrial and Europa science endings; sacrificing an Industrial Core can save the settlement while losing its workshop.
+Damage raises both the final Ship target and the survival minimum by one per point. Readiness can be prepared on any turn, but a missed transfer or activation prevents that objective's successful ending even when its progress bar is full. These are compressed gameplay demands, not a physical trajectory or radiation model.
+
+Cargo in hand can **deploy once**, preserve its points and capability, add its readiness effect, support matching stage demands, and leave the cycling deck. Alternatively, **cannibalize** it permanently for **3 Work**. Crew Conflict makes deployment cost 1 Work. Preserving equipment enables industrial and Europa science endings; sacrificing an Industrial Core can save the settlement while losing its workshop.
 
 Burdens remain dead draws and subtract one secondary point each. They also have distinct Arrival effects:
 
@@ -108,7 +110,7 @@ Retiring obligations reduces their continuing pressure. Current-turn Fatigue rem
 
 Endings distinguish **expedition lost**, **survivors stranded in Jovian orbit**, **ship-supported refuge**, **emergency foothold**, and **settlement activated**. Industry, Europa science, crew problems, and Cargo cannibalization are reported alongside that outcome. Cargo points minus Burdens remain a **secondary tally** and do not decide survival.
 
-Mission Debrief lists the final expedition deck by Work, Ops, Cargo, and Burden, with each card's copy count and expandable rules. Deployed Cargo remains in this inventory and is marked as deployed; permanently retired cards are excluded.
+Mission Debrief records each stage's Work payment, Cargo support, and success or failure, plus the final expedition deck by Work, Ops, Cargo, and Burden, with copy counts and expandable rules. Deployed Cargo remains in this inventory and is marked as deployed; permanently retired cards are excluded.
 
 The old six-week colony trial is disabled in the normal opening flow. Its source and tests are retained for reference; later colony survival can become a separate game. See [prototype decisions and playtest notes](docs/open-pool-arrival.md).
 

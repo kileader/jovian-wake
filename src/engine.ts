@@ -33,7 +33,7 @@ function copy(state: GameState): GameState {
     eventQueue: [...state.eventQueue], allowedOps: state.allowedOps && [...state.allowedOps],
     encounter: { ...state.encounter }, crisisResults: [...state.crisisResults], log: [...state.log],
     crisisWindow: state.crisisWindow && { ...state.crisisWindow },
-    arrival: state.arrival && { ...state.arrival, progress: { ...state.arrival.progress }, deployed: [...state.arrival.deployed], sacrificed: [...state.arrival.sacrificed] },
+    arrival: state.arrival && { ...state.arrival, progress: { ...state.arrival.progress }, deployed: [...state.arrival.deployed], sacrificed: [...state.arrival.sacrificed], demands: state.arrival.demands.map(result => ({ ...result })) },
     pending: state.pending?.kind === 'inspect'
       ? { ...state.pending, cards: [...state.pending.cards] }
       : state.pending && { ...state.pending },
@@ -477,13 +477,34 @@ export function getArrivalRequirements(state: GameState) {
   };
 }
 
+/** Readiness can be prepared early; operations must be staffed on their own turn. */
+export function getArrivalDemand(state: GameState) {
+  const turn = Math.max(1, state.arrival?.turn ?? 1);
+  const stage = ARRIVAL_STAGES[turn - 1];
+  const support = Math.min(2, (state.arrival?.deployed ?? []).filter(card => cardById(card.id).cargoFamily === stage.support).length);
+  const required = stage.work - support;
+  const paid = state.arrival?.demandPaid ?? 0;
+  return { stage, required, paid, support, remaining: Math.max(0, required - paid) };
+}
+
+export function payArrivalDemand(state: GameState, amount = 1): GameState {
+  if (state.phase !== 'arrival' || state.pending || state.arrival?.status !== 'active'
+    || !Number.isInteger(amount) || amount <= 0 || amount > state.work || amount > getArrivalDemand(state).remaining) return state;
+  const next = copy(state);
+  next.work -= amount;
+  next.arrival!.demandPaid += amount;
+  log(next, 'arrival', `${getArrivalDemand(next).stage.name} operations`, `Committed ${amount} Work to this turn's demand. This payment does not carry into later stages or add readiness progress.`);
+  return next;
+}
+
 /** Continue the actual draw/discard cycle; arrival never manufactures a replacement deck. */
 export function beginArrivalTurn(state: GameState): GameState {
   if (state.pending || !['arrival-ready', 'arrival-report'].includes(state.phase)
     || state.arrival?.status === 'complete' || (state.arrival?.turn ?? 0) >= 4) return state;
   const next = copy(state);
-  next.arrival ??= { turn: 0, status: 'active', progress: { trajectory: 0, ship: 0, surface: 0 }, deployed: [], sacrificed: [], damage: 0, fatigueTax: 0 };
+  next.arrival ??= { turn: 0, status: 'active', progress: { trajectory: 0, ship: 0, surface: 0 }, deployed: [], sacrificed: [], damage: 0, fatigueTax: 0, demandPaid: 0, demands: [] };
   next.arrival.turn++;
+  next.arrival.demandPaid = 0;
   next.arrival.fatigueTax = getArrivalRequirements(next).fatigue;
   next.phase = 'ops';
   next.ops = 1;
@@ -495,7 +516,8 @@ export function beginArrivalTurn(state: GameState): GameState {
   next.crisisWindow = null;
   next.encounter = { kind: 'cruise' };
   const drawn = draw(next, 5);
-  log(next, 'arrival', ARRIVAL_STAGES[next.arrival.turn - 1].name, `Arrival turn ${next.arrival.turn}/4. Drew ${drawn} cards from the voyage deck. Acquisitions are closed.${next.arrival.fatigueTax ? ` Fatigue will absorb ${next.arrival.fatigueTax} Work this turn.` : ''}`);
+  const demand = getArrivalDemand(next);
+  log(next, 'arrival', demand.stage.name, `Arrival turn ${next.arrival.turn}/4. Drew ${drawn} cards from the voyage deck. This stage needs ${demand.required} fresh Work (${demand.support} deployed Cargo support). Acquisitions are closed.${next.arrival.fatigueTax ? ` Fatigue will absorb ${next.arrival.fatigueTax} Work this turn.` : ''}`);
   return next;
 }
 
@@ -533,7 +555,7 @@ export function useArrivalCargo(state: GameState, uid: number, action: 'deploy' 
     else if (card.id === 'habitation-modules') progress.surface += 4;
     else if (card.id === 'industrial-core') { progress.ship += 4; progress.surface++; }
     else if (card.id === 'europa-instruments') { progress.trajectory += 3; progress.ship++; }
-    log(next, 'arrival', `${cardById(card.id).name} deployed`, `Equipment remains preserved and cannot be reused.${cost ? ` Spent ${cost} Work coordinating the deployment.` : ''}`);
+    log(next, 'arrival', `${cardById(card.id).name} deployed`, `Equipment remains preserved; its readiness effect happens once. Matching deployed kits reduce stage demands by 1 each, maximum 2.${cost ? ` Spent ${cost} Work coordinating the deployment.` : ''}`);
   }
   return next;
 }
@@ -541,11 +563,11 @@ export function useArrivalCargo(state: GameState, uid: number, action: 'deploy' 
 export function endArrivalTurn(state: GameState): GameState {
   if (state.phase !== 'arrival' || state.pending || state.arrival?.status !== 'active') return state;
   const next = copy(state);
-  const stage = ARRIVAL_STAGES[next.arrival!.turn - 1];
-  if (stage.minimum && next.arrival!.progress[stage.objective] < stage.minimum) {
-    next.arrival!.damage++;
-    log(next, 'arrival', 'Arrival margin lost', `${stage.name}: missed ${stage.minimum} ${stage.objective} progress. Ship requirements and survival minimum increase by 1.`);
-  }
+  const demand = getArrivalDemand(next);
+  const met = demand.remaining === 0;
+  next.arrival!.demands.push({ turn: next.arrival!.turn, required: demand.required, paid: demand.paid, support: demand.support, met });
+  if (!met && next.arrival!.turn < 4) next.arrival!.damage++;
+  log(next, 'arrival', met ? 'Stage demand met' : 'Stage demand missed', `${demand.stage.name}: ${demand.paid}/${demand.required} Work committed; ${demand.support} Cargo support.${met ? ' Operations completed on this turn.' : ` ${demand.stage.failure}`}`);
   next.discard.push(...next.hand, ...next.inPlay);
   next.hand = [];
   next.inPlay = [];
@@ -561,15 +583,18 @@ export function getArrivalOutcome(state: GameState) {
   const arrival = state.arrival;
   if (!arrival) return null;
   const requirements = getArrivalRequirements(state);
-  const trajectoryReady = arrival.progress.trajectory >= requirements.targets.trajectory;
-  const shipReady = arrival.progress.ship >= requirements.targets.ship;
-  const surfaceReady = arrival.progress.surface >= requirements.targets.surface;
+  const complete = arrival.status === 'complete';
+  const met = (turn: number) => arrival.demands.some(result => result.turn === turn && result.met);
+  const trajectoryReady = arrival.progress.trajectory >= requirements.targets.trajectory && (!complete || met(3));
+  const shipReady = arrival.progress.ship >= requirements.targets.ship && (!complete || (met(1) && met(2)));
+  const surfaceReady = arrival.progress.surface >= requirements.targets.surface && (!complete || met(4));
   const survived = arrival.progress.ship >= requirements.minimumShip;
-  const settlement = survived && trajectoryReady && surfaceReady;
+  const settlement = complete && survived && trajectoryReady && surfaceReady;
   const cards = ownedCards(state);
   const has = (id: CardId) => cards.some(card => card.id === id);
   const deployed = (id: CardId) => arrival.deployed.some(card => card.id === id);
-  const title = !survived ? 'Expedition lost'
+  const title = !complete ? 'Jovian Arrival in progress'
+    : !survived ? 'Expedition lost'
     : !trajectoryReady ? 'Survivors remain in Jovian orbit'
     : !surfaceReady ? 'Callisto reached: ship-supported refuge'
     : !shipReady ? 'Emergency Callisto foothold'

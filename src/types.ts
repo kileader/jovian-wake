@@ -119,6 +119,13 @@ export interface GameState {
 }
 
 export type ArrivalObjective = 'trajectory' | 'ship' | 'surface';
+export interface ArrivalDemandResult {
+  turn: number;
+  required: number;
+  paid: number;
+  support: number;
+  met: boolean;
+}
 export interface ArrivalState {
   turn: number;
   status: 'active' | 'complete';
@@ -127,4 +134,6 @@ export interface ArrivalState {
   sacrificed: CardId[];
   damage: number;
   fatigueTax: number;
+  demandPaid: number;
+  demands: ArrivalDemandResult[];
 }

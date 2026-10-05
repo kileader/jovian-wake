@@ -2,10 +2,10 @@ import type { CardDefinition, CargoFamily, Crisis, VoyageEvent } from './types.t
 
 export const DEFAULT_MONTHS = 24;
 export const ARRIVAL_STAGES = [
-  { name: 'Jupiter approach', text: 'Establish the capture trajectory before entering the Jovian system.', objective: 'trajectory', minimum: 2 },
-  { name: 'Radiation passage', text: 'Keep shielding, cooling, and power stable through the exposed passage.', objective: 'ship', minimum: 3 },
-  { name: 'Callisto transfer', text: 'Complete the transfer geometry and prepare the surface equipment.', objective: 'trajectory', minimum: 6 },
-  { name: 'Surface activation', text: 'Finish the transfer, secure the ship, and activate the first shelter systems.', objective: 'surface', minimum: 0 },
+  { name: 'Jupiter capture', text: 'Execute the capture maneuver and verify the orbit with live navigation measurements.', work: 4, support: 'science', failure: 'Missed capture operations add 1 ship damage and limit the ending to emergency readiness.' },
+  { name: 'Radiation passage', text: 'Operate shielding, cooling, and power through the exposed passage.', work: 5, support: 'industry', failure: 'Missed radiation operations add 1 ship damage and limit the ending to emergency readiness.' },
+  { name: 'Callisto transfer', text: 'Execute the transfer maneuver and confirm the Callisto approach.', work: 4, support: 'science', failure: 'Missing the transfer adds 1 ship damage and leaves survivors in Jovian orbit.' },
+  { name: 'Surface activation', text: 'Commission life support, power, and the first shelter systems on the surface.', work: 5, support: 'habitat', failure: 'Missing activation leaves a ship-supported refuge if Callisto is reached.' },
 ] as const;
 export const CARGO_FAMILIES: { id: CargoFamily; name: string; purpose: string }[] = [
   { id: 'habitat', name: 'Habitat', purpose: 'Living space, medical care, and life-support reserves.' },
@@ -36,25 +36,25 @@ export const CARDS: CardDefinition[] = [
   },
   {
     id: 'colony-stores', name: 'Colony Stores', type: 'Cargo', cost: 2,
-    text: 'Habitat Cargo. Secondary value: 1 point. Medical Isolation costs this kit plus 2 Work. Arrival: deploy from hand for +2 Surface, or cannibalize for +3 Work.',
+    text: 'Habitat Cargo. Secondary value: 1 point. Medical Isolation costs this kit plus 2 Work. Arrival: deploy for +2 Surface and -1 Work to activation demand per deployed Habitat kit (maximum 2), or cannibalize for +3 Work.',
     flavor: 'Existing materials inspected, packed, and reserved for the first days on Callisto.',
     points: 1, cargoFamily: 'habitat',
   },
   {
     id: 'habitation-modules', name: 'Habitation Modules', type: 'Cargo', cost: 5,
-    text: 'Habitat Cargo. Secondary value: 3 points. Can resolve Medical Isolation without Work. Arrival: deploy from hand for +4 Surface, or cannibalize for +3 Work.',
+    text: 'Habitat Cargo. Secondary value: 3 points. Can resolve Medical Isolation without Work. Arrival: deploy for +4 Surface and -1 Work to activation demand per deployed Habitat kit (maximum 2), or cannibalize for +3 Work.',
     flavor: 'Stowed shelter sections tested, outfitted, and repacked for deployment on Callisto.',
     points: 3, cargoFamily: 'habitat',
   },
   {
     id: 'industrial-core', name: 'Industrial Core', type: 'Cargo', cost: 5,
-    text: 'Industry Cargo. Secondary value: 3 points. Can be consumed for an Industry crisis. Arrival: deploy from hand for +4 Ship and +1 Surface, or cannibalize for +3 Work.',
+    text: 'Industry Cargo. Secondary value: 3 points. Can be consumed for an Industry crisis. Arrival: deploy for +4 Ship, +1 Surface, and -1 Work to radiation demand per deployed Industry kit (maximum 2), or cannibalize for +3 Work.',
     flavor: 'Machine tools and power hardware already aboard, tested and prepared as a working surface workshop.',
     points: 3, cargoFamily: 'industry',
   },
   {
     id: 'europa-instruments', name: 'Europa Instruments', type: 'Cargo', cost: 5,
-    text: 'Science Cargo. Secondary value: 3 points. Can be consumed for a Science crisis. Arrival: deploy from hand for +3 Trajectory and +1 Ship, or cannibalize for +3 Work.',
+    text: 'Science Cargo. Secondary value: 3 points. Can be consumed for a Science crisis. Arrival: deploy for +3 Trajectory, +1 Ship, and -1 Work to capture/transfer demand per deployed Science kit (maximum 2), or cannibalize for +3 Work.',
     flavor: 'Calibrated reference sensors and sample-analysis hardware reserved for the Europa mission.',
     points: 3, cargoFamily: 'science',
   },

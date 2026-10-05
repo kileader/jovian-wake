@@ -129,9 +129,11 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
     } else if (after.arrival && after.arrival.turn !== before.arrival?.turn) {
       message(`Arrival turn ${after.arrival.turn} · new hand`, `${after.hand.length} cards from the voyage deck`, 'deal', after.hand.length);
     } else if (after.phase === 'arrival-report' && before.phase !== 'arrival-report') {
-      message(`Arrival turn ${after.arrival!.turn} complete`, 'Hand cleared · objective progress preserved', 'end');
+      message(`Arrival turn ${after.arrival!.turn} complete`, `Stage demand ${after.arrival!.demands.at(-1)!.met ? 'met' : 'missed'} · readiness preserved`, 'end');
     } else if ((after.arrival?.deployed.length ?? 0) > (before.arrival?.deployed.length ?? 0)) {
-      message(`${cardById(after.arrival!.deployed.at(-1)!.id).name} deployed`, 'Objective progress added · equipment preserved', 'play');
+      message(`${cardById(after.arrival!.deployed.at(-1)!.id).name} deployed`, 'Readiness added · equipment provides stage support', 'play');
+    } else if (after.arrival && before.arrival && after.arrival.demandPaid > before.arrival.demandPaid) {
+      message('Stage demand committed', `Spent ${before.work - after.work} Work · paid for this stage only`, 'work');
     } else if (after.arrival && before.arrival && after.work < before.work && ['trajectory', 'ship', 'surface'].some(key => after.arrival!.progress[key as keyof typeof after.arrival.progress] > before.arrival!.progress[key as keyof typeof before.arrival.progress])) {
       message('Arrival progress committed', `Spent ${before.work - after.work} Work · progress carries forward`, 'work');
     } else if (crisis) {

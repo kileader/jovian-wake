@@ -1,10 +1,10 @@
 // Deterministic smoke playtests, not estimates of human difficulty or enjoyment.
 import assert from 'node:assert/strict';
-import { CARDS, ARRIVAL_STAGES, DEFAULT_MONTHS } from '../src/content.ts';
+import { CARDS, DEFAULT_MONTHS } from '../src/content.ts';
 import {
   advancePhase, beginArrivalTurn, beginMonth, buyCard, canAcquire, canBuyCard, canPlayCard, cardById,
   commitArrivalWork, createGame, crisisCargoWorkCost, endArrivalTurn, endMonth, getArrivalOutcome,
-  getArrivalRequirements, getCurrentCrisis, getCurrentEvent, getScore, ownedCards,
+  getArrivalDemand, getArrivalRequirements, getCurrentCrisis, getCurrentEvent, getScore, ownedCards, payArrivalDemand,
   playAllWork, playCard, resolveChoice, resolveCrisis, respondToEvent, useArrivalCargo,
 } from '../src/engine.ts';
 
@@ -79,24 +79,26 @@ function finishArrival(state, build) {
     for (const card of [...state.hand].filter(c => cardById(c.id).type === 'Cargo')) {
       const requirements = getArrivalRequirements(state);
       const progress = state.arrival.progress;
-      const useful = card.id === 'industrial-core' ? progress.ship < requirements.targets.ship || progress.surface < requirements.targets.surface
+      const supports = getArrivalDemand(state).stage.support === cardById(card.id).cargoFamily && getArrivalDemand(state).support < 2;
+      const useful = supports || (card.id === 'industrial-core' ? progress.ship < requirements.targets.ship || progress.surface < requirements.targets.surface
         : card.id === 'europa-instruments' ? progress.trajectory < requirements.targets.trajectory || progress.ship < requirements.targets.ship
-        : progress.surface < requirements.targets.surface;
+        : progress.surface < requirements.targets.surface);
       const deploy = useful && state.work >= requirements.deploymentCost;
       state = useArrivalCargo(state, card.uid, deploy ? 'deploy' : 'sacrifice');
     }
-    const stage = ARRIVAL_STAGES[turn - 1];
+    const payment = Math.min(state.work, getArrivalDemand(state).remaining);
+    if (payment) state = payArrivalDemand(state, payment);
     const allocate = (objective, target) => {
       const amount = Math.min(state.work, Math.max(0, target - state.arrival.progress[objective]));
       if (amount) state = commitArrivalWork(state, objective, amount);
     };
-    if (stage.minimum) allocate(stage.objective, stage.minimum);
     const requirements = getArrivalRequirements(state);
     // Keep basic survival viable, then complete the transfer, surface, and full ship readiness.
     allocate('ship', requirements.minimumShip);
     for (const objective of ['trajectory', 'surface', 'ship']) allocate(objective, requirements.targets[objective]);
     state = endArrivalTurn(state);
     assert.equal(state.phase, turn === 4 ? 'arrived' : 'arrival-report');
+    assert.equal(state.arrival.demands.length, turn, 'Record one fresh demand per turn');
     conserve(state);
   }
   return state;
