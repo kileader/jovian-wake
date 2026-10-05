@@ -108,6 +108,8 @@ Retiring obligations reduces their continuing pressure. Current-turn Fatigue rem
 
 Endings distinguish **expedition lost**, **survivors stranded in Jovian orbit**, **ship-supported refuge**, **emergency foothold**, and **settlement activated**. Industry, Europa science, crew problems, and Cargo cannibalization are reported alongside that outcome. Cargo points minus Burdens remain a **secondary tally** and do not decide survival.
 
+Mission Debrief lists the final expedition deck by Work, Ops, Cargo, and Burden, with each card's copy count and expandable rules. Deployed Cargo remains in this inventory and is marked as deployed; permanently retired cards are excluded.
+
 The old six-week colony trial is disabled in the normal opening flow. Its source and tests are retained for reference; later colony survival can become a separate game. See [prototype decisions and playtest notes](docs/open-pool-arrival.md).
 
 ## Engineering experiment

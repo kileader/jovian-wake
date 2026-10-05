@@ -37,3 +37,9 @@ Complete 24 cruise turns and four Arrival turns using one physical deck. Verify 
 Record seed, purchase priorities, crisis responses and response month, Arrival progress, deployed/cannibalized kits, and the resulting ending. Compare decisions and hand quality before changing numbers. Automated policies protect accounting and transitions; they cannot tell whether a strategy is enjoyable or optimally played.
 
 After these playtests, decide whether to adjust the pool and Arrival values, then design Phase 1 selection. Do not treat the open pool as a finalized easy mode yet.
+
+## First human playtest finding
+
+Kevin reported that a thin Ops engine followed by multiple copies of each Cargo completed all Arrival objectives on turn 1, leaving the next three turns without meaningful decisions. The final report showed 8 Trajectory, 12 Ship, and 12 Surface, with industrial and Europa science activation and no Arrival cannibalization. This reveals a structural weakness: later checkpoints accept already banked progress, so they impose no new demand on a sufficiently strong first hand.
+
+The next Arrival design pass should test fresh demands on each stage while preserving a payoff for early preparation and Cargo. Raising the cumulative targets alone would retain the same one-payment structure. Mission Debrief now includes the complete remaining deck so future reports can show the actual engine behind the outcome.

@@ -310,6 +310,43 @@ test('arrival views are immutable, escape player input, and show outcomes before
   assert.equal(JSON.stringify(state), before);
 });
 
+test('debrief lists every remaining card by type and count, including deployed Cargo exactly once', () => {
+  let state = fixture(['industrial-core', 'crew-sync', 'fatigue'], ['expert-shift', 'crew-sync'],
+    ['archive-access', 'industrial-core', 'colony-stores'], { month: 24, phase: 'arrival', arrival: arrival() });
+  state = useArrivalCargo(state, 1, 'deploy');
+  state.inPlay.push({ id: 'equipment-drills', uid: state.nextUid++ });
+  state.retired.push({ id: 'crew-shift', uid: state.nextUid++ });
+  state = freeze({ ...state, phase: 'arrived', arrival: { ...state.arrival!, turn: 4, status: 'complete' } });
+  const before = JSON.stringify(state);
+  const html = renderArrivalDebrief(state);
+  const deck = html.slice(html.indexOf('<section class="debrief-deck"'), html.indexOf('<section class="debrief-survived"'));
+  assert.match(deck, /<b>9<\/b> cards/);
+  const expected = new Map<CardId, number>([
+    ['crew-sync', 2], ['expert-shift', 1], ['archive-access', 1], ['equipment-drills', 1],
+    ['industrial-core', 2], ['colony-stores', 1], ['fatigue', 1],
+  ]);
+  assert.equal((deck.match(/data-card-id=/g) ?? []).length, expected.size);
+  for (const [id, count] of expected) {
+    const row = deck.match(new RegExp(`data-card-id="${id}">[\\s\\S]*?</details>`));
+    assert.ok(row, `${id} appears in the deck`);
+    assert.match(row[0], new RegExp(`<b>×${count}</b></summary>`));
+  }
+  assert.match(deck, /Industrial Core<small>1 deployed<\/small>/);
+  assert.ok(!deck.includes('data-card-id="crew-shift"'));
+  for (const [type, count] of [['Work', 2], ['Ops', 3], ['Cargo', 3], ['Burden', 1]]) {
+    assert.ok(deck.includes(`${type}<small>${count} ${count === 1 ? 'card' : 'cards'}</small>`));
+  }
+  assert.equal(JSON.stringify(state), before);
+  conserved(state);
+});
+
+test('debrief handles an empty expedition deck without losing the inventory section', () => {
+  const html = renderArrivalDebrief(arrivalState([], { phase: 'arrived', arrival: arrival({ turn: 4, status: 'complete' }) }));
+  assert.match(html, /Final expedition deck/);
+  assert.match(html, /<b>0<\/b> cards/);
+  assert.equal((html.match(/None remaining\./g) ?? []).length, 4);
+});
+
 test('a complete 24-month cruise and four-turn Arrival replay deterministically with card conservation', () => {
   function run() {
     let state = createGame('FULL-ARRIVAL-REPLAY');

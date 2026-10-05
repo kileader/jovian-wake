@@ -1,6 +1,6 @@
-import { ARRIVAL_STAGES, CRISES } from './content.ts';
+import { ARRIVAL_STAGES, CARDS, CRISES } from './content.ts';
 import { cardById, getArrivalOutcome, getArrivalRequirements, getManifest, getScore, ownedCards } from './engine.ts';
-import type { ArrivalObjective, GameState } from './types.ts';
+import type { ArrivalObjective, CardType, GameState } from './types.ts';
 
 const h = (value: string | number) => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const objectives: ArrivalObjective[] = ['trajectory', 'ship', 'surface'];
@@ -62,7 +62,9 @@ export function renderArrivalDebrief(state: GameState): string {
   const requirements = getArrivalRequirements(state);
   const score = getScore(state);
   const manifest = getManifest(state);
-  const burdens = ownedCards(state).filter(card => cardById(card.id).type === 'Burden');
+  const cards = ownedCards(state);
+  const deckTypes: CardType[] = ['Work', 'Ops', 'Cargo', 'Burden'];
+  const burdens = cards.filter(card => cardById(card.id).type === 'Burden');
   const obligations = [...new Set(burdens.map(card => card.id))];
   return `<main class="mission-debrief arrival-debrief" data-phase="arrived" data-month="${state.month}" data-survived="${outcome.survived}">
     <div class="debrief-register"><span>EXPEDITION ARCHIVE / FOUR-TURN ARRIVAL</span><span class="debrief-seed">SEED / ${h(state.seed)}</span></div>
@@ -71,6 +73,19 @@ export function renderArrivalDebrief(state: GameState): string {
     <section class="debrief-chapter"><div class="debrief-section-head"><div><p class="debrief-kicker">WHAT THE DECK ACHIEVED</p><h2>Arrival outcome</h2></div></div>
       <div class="arrival-results">${objectives.map(objective => `<article><h3>${label(objective)}</h3><strong>${arrival.progress[objective]} / ${requirements.targets[objective]}</strong><p>${objective === 'ship' ? `${requirements.minimumShip} needed for crew survival; ${requirements.targets.ship} for full readiness.` : arrival.progress[objective] >= requirements.targets[objective] ? 'Objective achieved.' : 'Objective incomplete.'}</p></article>`).join('')}</div>
       <div class="debrief-next"><div><h3>${h(outcome.industry)}</h3><p>${h(outcome.science)}</p></div><div><h3>${arrival.sacrificed.length} Cargo cannibalized during arrival</h3><p>${arrival.sacrificed.map(id => h(cardById(id).name)).join(' · ') || 'No arrival cannibalization.'}</p></div></div>
+    </section>
+    <section class="debrief-deck" aria-labelledby="debrief-deck-title"><div class="debrief-section-head"><div><p class="debrief-kicker">THE CARDS THAT MADE THE CROSSING</p><h2 id="debrief-deck-title">Final expedition deck</h2></div><p class="debrief-deck-total"><b>${cards.length}</b> ${cards.length === 1 ? 'card' : 'cards'}</p></div>
+      <p class="debrief-note">All remaining cards, including deployed Cargo. Open a card for its rules.</p>
+      <div class="debrief-deck-groups">${deckTypes.map(type => {
+        const definitions = CARDS.filter(card => card.type === type && cards.some(instance => instance.id === card.id));
+        const count = cards.filter(card => cardById(card.id).type === type).length;
+        return `<section class="debrief-deck-group type-${type.toLowerCase()}" aria-labelledby="debrief-deck-${type.toLowerCase()}"><h3 id="debrief-deck-${type.toLowerCase()}">${type}<small>${count} ${count === 1 ? 'card' : 'cards'}</small></h3>
+          ${definitions.map(card => {
+            const copies = cards.filter(instance => instance.id === card.id).length;
+            const deployed = arrival.deployed.filter(instance => instance.id === card.id).length;
+            return `<details class="inventory-card" data-card-id="${h(card.id)}"><summary><span>${h(card.name)}${deployed ? `<small>${deployed} deployed</small>` : ''}</span><b>×${copies}</b></summary><p>${h(card.text)}</p></details>`;
+          }).join('') || '<p class="debrief-note">None remaining.</p>'}</section>`;
+      }).join('')}</div>
     </section>
     <section class="debrief-survived"><h2>${outcome.survived ? 'Equipment preserved' : 'Final equipment record'}</h2><div class="arrival-results">${manifest.map(family => `<article><h3>${h(family.name)}</h3><strong>${family.count} kits</strong><p>${arrival.deployed.filter(card => cardById(card.id).cargoFamily === family.id).length} deployed; ${family.retired} permanently lost across the expedition.</p></article>`).join('')}</div></section>
     <section class="debrief-obligations"><h2>Unresolved obligations</h2>${obligations.length ? `<ul>${obligations.map(id => `<li><span>${h(cardById(id).name)}</span><b>×${burdens.filter(card => card.id === id).length}</b></li>`).join('')}</ul>` : '<p>No unresolved Burdens.</p>'}</section>
