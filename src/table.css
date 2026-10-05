@@ -113,8 +113,17 @@
 .manifest-horizon { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10px; line-height: 1.5; color: var(--muted); }
 .manifest-horizon strong { font-weight: 400; color: var(--ink); }
 .table-page footer { padding: 10px 0 4px; font-size: 7px; }
-.action-notice { top: 48%; left: 50%; right: auto; bottom: auto; width: max-content; max-width: min(360px, calc(100vw - 36px)); transform: translate(-50%, calc(-50% + 8px)); text-align: center; padding: 13px 18px; }
-.action-notice.visible { transform: translate(-50%, -50%); }
+.turn-feedback { flex: 1; min-width: 0; min-height: 34px; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; }
+.turn-feedback > * { grid-area: 1 / 1; }
+.turn-feedback:has(.action-notice.visible) .turn-hint { visibility: hidden; }
+.action-notice { display: none; min-width: 0; }
+.action-notice.visible { display: block; }
+.action-notice strong, .action-notice span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-notice strong { font: 600 12px/1.4 var(--mono); color: #a2c9e3; }
+.action-notice span { font: 10px/1.4 var(--mono); color: var(--muted); }
+.action-notice[data-cue="work"] strong { color: #d3b275; }
+.action-notice[data-cue="gain"] strong { color: #97bd96; }
+.action-notice[data-cue="retire"] strong, .action-notice[data-cue="burden"] strong { color: #d99188; }
 @media (max-width: 1100px) and (min-width: 761px) {
   .table-page, main.table-page[data-phase="buy"] { padding-left: 16px; padding-right: 16px; }
   .table-layout { grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr); gap: 12px; }
@@ -167,7 +176,8 @@
   .table-stage .card-rule { font-size: 10px; line-height: 1.4; margin-bottom: 6px; }
   .table-stage .in-play { flex-direction: row; flex-wrap: wrap; }
   .table-stage .turn-actions { order: 5; position: sticky; bottom: 0; z-index: 5; flex-direction: row; flex-wrap: wrap; gap: 8px; background: var(--surface); padding: 8px 0 2px; }
-  .table-stage .turn-actions p { flex: 1 1 130px; font-size: 10px; }
+  .table-stage .turn-actions .turn-feedback { flex: 1 1 130px; }
+  .table-stage .turn-actions p { font-size: 10px; }
   .table-stage .turn-actions .primary { flex: 1 1 auto; padding: 11px; justify-content: center; }
   .supply-heading .eyebrow { display: none; }
   .supply-heading h2 { font-size: 23px; }

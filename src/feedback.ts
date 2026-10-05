@@ -14,7 +14,8 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
   const notice = document.createElement('div');
   notice.className = 'action-notice';
   notice.setAttribute('role', 'status');
-  document.body.append(layer, notice);
+  notice.setAttribute('aria-atomic', 'true');
+  document.body.append(layer);
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const animations = new Set<Animation>();
   const deals = new Map<HTMLElement, number>();
@@ -72,6 +73,7 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
     const description = document.createElement('span');
     description.textContent = detail;
     notice.replaceChildren(heading, description);
+    notice.title = `${title} · ${detail}`;
     notice.dataset.cue = cue;
     notice.classList.add('visible');
     noticeTimer = setTimeout(() => notice.classList.remove('visible'), 2200);
@@ -90,8 +92,9 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
     Object.assign(ghost.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
     layer.append(ghost);
     const target = destination?.getBoundingClientRect();
-    // A visible notice provides an endpoint when the hand is above the viewport.
-    const end = target && visible(target) ? target : notice.getBoundingClientRect();
+    // Fade locally if neither a destination nor the inline feedback is on screen.
+    const feedback = notice.getBoundingClientRect();
+    const end = target && visible(target) ? target : visible(feedback) ? feedback : rect;
     const x = retire ? 0 : end.left + end.width / 2 - rect.left - rect.width / 2;
     const y = retire ? -55 : end.top + end.height / 2 - rect.top - rect.height / 2;
     animate(ghost, [
@@ -102,6 +105,9 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
   }
 
   function show(before: GameState, after: GameState, views: Views) {
+    const slot = app.querySelector('[data-feedback-slot]');
+    if (slot) slot.append(notice);
+    else notice.remove();
     const beforeOwned = new Set(ownedCards(before).map(card => card.uid));
     const beforeHand = new Set(before.hand.map(card => card.uid));
     const beforeDiscard = new Set(before.discard.map(card => card.uid));

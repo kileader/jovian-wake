@@ -145,13 +145,17 @@ function eventDecision(effect: { count: number; cardType?: string; burden: CardI
 
 function phaseControls() {
   const phase = state.phase;
+  const hint = phase === 'ops' ? 'Playing Work ends the Ops phase.'
+    : phase === 'work' ? `Play your Work cards, then ${getCurrentCrisis(state) ? 'respond to the crisis' : 'acquire cards'}.`
+    : phase === 'buy' ? `${state.buys ? 'Acquire a card or end the month.' : 'No Buys left. Ready to end the month.'} Unused Work expires.`
+    : phase === 'crisis' ? 'Choose one of the responses above. Work spent on the problem is unavailable for acquisitions.'
+    : 'Resolve the event before playing your hand.';
   return `<nav class="phase-strip" aria-label="Monthly sequence">${[['ops', '1 · Ops'], ['work', '2 · Work'], ...(getCurrentCrisis(state) ? [['crisis', '3 · Respond'], ['buy', '4 · Acquire']] : [['buy', '3 · Acquire']])].map(([key, label]) => `<span ${key === phase ? 'aria-current="step"' : ''}>${label}</span>`).join('<i aria-hidden="true">→</i>')}</nav>
     <div class="turn-actions">
-    ${phase === 'ops' ? `<p>Playing Work ends the Ops phase.</p><button class="primary" data-action="work" ${state.pending ? 'disabled' : ''}>${state.ops && state.hand.some(c => cardById(c.id).type === 'Ops') ? 'Finish Ops & play Work' : 'Play Work'} ${arrow}</button>` : ''}
-    ${phase === 'work' ? `<p>Play your Work cards, then ${getCurrentCrisis(state) ? 'respond to the crisis' : 'acquire cards'}.</p><button class="primary" data-action="all-work" ${state.pending ? 'disabled' : ''}>Play all Work & ${getCurrentCrisis(state) ? 'respond' : 'acquire'} ${arrow}</button>` : ''}
-    ${phase === 'buy' ? `<p>${state.buys ? 'Acquire a card or end the month.' : 'No Buys left. Ready to end the month.'} Unused Work expires.</p><button class="primary" data-action="end" ${state.pending ? 'disabled' : ''}>End month ${pad(state.month)} ${arrow}</button>` : ''}
-    ${phase === 'crisis' ? '<p>Choose one of the responses above. Work spent on the problem is unavailable for acquisitions.</p>' : ''}
-    ${phase === 'event' ? '<p>Resolve the event before playing your hand.</p>' : ''}</div>`;
+    <div class="turn-feedback" data-feedback-slot><p class="turn-hint">${h(hint)}</p></div>
+    ${phase === 'ops' ? `<button class="primary" data-action="work" ${state.pending ? 'disabled' : ''}>${state.ops && state.hand.some(c => cardById(c.id).type === 'Ops') ? 'Finish Ops & play Work' : 'Play Work'} ${arrow}</button>` : ''}
+    ${phase === 'work' ? `<button class="primary" data-action="all-work" ${state.pending ? 'disabled' : ''}>Play all Work & ${getCurrentCrisis(state) ? 'respond' : 'acquire'} ${arrow}</button>` : ''}
+    ${phase === 'buy' ? `<button class="primary" data-action="end" ${state.pending ? 'disabled' : ''}>End month ${pad(state.month)} ${arrow}</button>` : ''}</div>`;
 }
 
 function report() {
@@ -160,7 +164,7 @@ function report() {
   return `<p class="eyebrow">MONTH ${pad(state.month)} / LOG RECORDED</p><h2 id="dispatch-title" tabindex="-1">${result ? result.response !== 'defer' ? 'The work is done.' : 'A workaround will have to do.' : 'A month behind us.'}</h2>
     <p class="dispatch-body">${result ? h(responseSummary(result)) + '. The crossing continues.' : 'The hand is discarded. Work and unused Ops do not carry forward.'}</p>
     <div class="report-entries">${entries.length ? entries.map(e => `<p><strong>${h(e.title)}</strong><br>${h(e.text)}</p>`).join('') : '<p>No cards acquired or retired this month.</p>'}</div>
-    <div class="continue-row"><p>${nextEncounterText()}</p><button class="primary" data-action="begin">Continue to month ${pad(state.month + 1)} ${arrow}</button></div>`;
+    <div class="continue-row"><div class="turn-feedback" data-feedback-slot><p class="turn-hint">${nextEncounterText()}</p></div><button class="primary" data-action="begin">Continue to month ${pad(state.month + 1)} ${arrow}</button></div>`;
 }
 
 function nextEncounterText() {
