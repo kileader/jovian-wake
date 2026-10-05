@@ -1,4 +1,4 @@
-import { cardById, getScore, ownedCards } from './engine.ts';
+import { cardById, getArrivalOutcome, getScore, ownedCards } from './engine.ts';
 import { CRISES } from './content.ts';
 import type { GameState } from './types.ts';
 import type { createSoundController, SoundCue } from './sound.ts';
@@ -119,14 +119,24 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
     const drawn = after.hand.filter(card => !beforeHand.has(card.uid));
     const moved = new Set([...played, ...retired].map(card => card.uid));
     const discarded = after.discard.filter(card => beforeOwned.has(card.uid) && !beforeDiscard.has(card.uid) && !moved.has(card.uid));
-    const work = after.month === before.month ? after.workGenerated - before.workGenerated : 0;
+    const work = after.month === before.month && after.arrival?.turn === before.arrival?.turn ? after.workGenerated - before.workGenerated : 0;
     const crisis = after.crisisResults.find(result => !before.crisisResults.some(previous => previous.month === result.month));
 
     if (after.phase === 'arrived' && before.phase !== 'arrived') {
-      message('Callisto reached', `${getScore(after).total} arrival points · mission debrief ready`, 'arrival');
+      message(getArrivalOutcome(after)?.title ?? 'Callisto reached', `${getScore(after).total} secondary points · mission debrief ready`, 'arrival');
+    } else if (after.phase === 'arrival-ready' && before.phase !== 'arrival-ready') {
+      message('Cruise complete', 'Acquisitions closed · four Arrival turns remain', 'arrival');
+    } else if (after.arrival && after.arrival.turn !== before.arrival?.turn) {
+      message(`Arrival turn ${after.arrival.turn} · new hand`, `${after.hand.length} cards from the voyage deck`, 'deal', after.hand.length);
+    } else if (after.phase === 'arrival-report' && before.phase !== 'arrival-report') {
+      message(`Arrival turn ${after.arrival!.turn} complete`, 'Hand cleared · objective progress preserved', 'end');
+    } else if ((after.arrival?.deployed.length ?? 0) > (before.arrival?.deployed.length ?? 0)) {
+      message(`${cardById(after.arrival!.deployed.at(-1)!.id).name} deployed`, 'Objective progress added · equipment preserved', 'play');
+    } else if (after.arrival && before.arrival && after.work < before.work && ['trajectory', 'ship', 'surface'].some(key => after.arrival!.progress[key as keyof typeof after.arrival.progress] > before.arrival!.progress[key as keyof typeof before.arrival.progress])) {
+      message('Arrival progress committed', `Spent ${before.work - after.work} Work · progress carries forward`, 'work');
     } else if (crisis) {
       const detail = crisis.response === 'work' ? `Spent ${crisis.workSpent} Work`
-        : crisis.response === 'cargo' ? `Consumed ${cardById(crisis.cargoSpent!).name}`
+        : crisis.response === 'cargo' ? `Consumed ${cardById(crisis.cargoSpent!).name}${crisis.workSpent ? ` + ${crisis.workSpent} Work` : ''}`
         : `${crisis.burdensAdded} Burdens carried forward`;
       message(CRISES.find(definition => definition.id === crisis.id)!.name, detail, 'crisis');
     } else if (after.phase === 'report' && before.phase !== 'report') {
@@ -145,6 +155,8 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
       message(`${burdens.length} ${burdens.length === 1 ? 'Burden' : 'Burdens'} carried forward`, cardById(burdens[0].id).name, 'burden');
     } else if (before.pending?.kind === 'discard' && before.pending.redraw && !after.pending) {
       message('Hand refreshed', after.log.at(-1)?.text ?? 'Discarded cards can return after a shuffle', 'deal');
+    } else if (before.pending?.kind === 'retrieve' && !after.pending) {
+      message('Discard retrieval complete', `${drawn.length} cards returned to hand`, 'deal');
     } else if (discarded.length) {
       message('Cards moved to discard', after.phase === 'report' || after.phase === 'arrived' ? 'The month is complete' : 'Available again after a shuffle', 'discard');
     } else if (work > 0) {

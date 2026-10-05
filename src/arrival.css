@@ -1,0 +1,33 @@
+.arrival-panel h2 { margin: .5rem 0 1rem; }
+.arrival-work { display: flex; align-items: baseline; gap: .5rem; }
+.arrival-work b { font-size: 2rem; color: var(--accent, #9be4da); }
+.arrival-objectives { display: grid; gap: 1rem; }
+.arrival-objectives section { border-bottom: 1px solid #ffffff18; padding-bottom: 1rem; }
+.arrival-objectives section > div:first-child { display: flex; justify-content: space-between; gap: .5rem; }
+.arrival-objectives h3 { margin: 0 0 .5rem; }
+.arrival-objectives progress { width: 100%; height: .65rem; accent-color: #9be4da; margin: 0 0 .6rem; }
+.arrival-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
+.arrival-buttons button { font-size: .78rem; padding: .55rem .7rem; }
+.arrival-penalties { margin: 1rem 0; font-size: .85rem; }
+.arrival-penalties li { margin: .5rem 0; }
+.arrival-cargo { display: grid; gap: .75rem; }
+.arrival-cargo article { padding: .8rem; border: 1px solid #ffffff24; border-radius: .45rem; }
+.arrival-cargo p { font-size: .8rem; line-height: 1.6; }
+.arrival-end { margin-top: 1.5rem; }
+.arrival-end > button { width: 100%; }
+.arrival-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
+.arrival-results article { background: #ffffff06; border: 1px solid #ffffff18; padding: 1rem; }
+.arrival-results strong { font-size: 1.6rem; color: #9be4da; }
+.arrival-results p { font-size: .85rem; }
+.retrieval-cards { margin: 1rem 0; }
+.crisis-window { margin: .75rem 0; }
+.arrival-debrief .debrief-hero { grid-template-columns: minmax(0, 1fr) 240px; }
+.arrival-debrief .debrief-outcome { font: 28px/1.2 var(--display); }
+.arrival-debrief[data-survived="false"] .debrief-outcome { color: var(--orange); }
+.arrival-debrief .debrief-score { background: #192b3d; color: var(--muted); border-left: 1px solid var(--line); }
+.arrival-debrief .debrief-score > strong { font-size: 48px; color: var(--report-green); }
+@media (max-width: 600px) { .arrival-results { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .arrival-debrief .debrief-hero { grid-template-columns: 1fr; }
+  .arrival-debrief .debrief-score { border-left: 0; border-top: 1px solid var(--line); }
+}

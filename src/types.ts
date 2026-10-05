@@ -6,6 +6,8 @@ export type CardId =
   | 'streamlining' | 'crew-sync' | 'integrated-diagnostics' | 'salvage'
   | 'cross-training' | 'parallel-programs' | 'rapid-prototyping'
   | 'load-balancing' | 'systems-integration' | 'predictive-maintenance'
+  | 'crew-reassignment' | 'watch-coordination' | 'archive-access' | 'cargo-reallocation'
+  | 'logistics-network' | 'batch-preparation' | 'equipment-drills' | 'contingency-shift'
   | 'fatigue' | 'repair-backlog' | 'exposure-monitoring' | 'crew-conflict' | 'medical-followup';
 
 export interface CardDefinition {
@@ -17,12 +19,15 @@ export interface CardDefinition {
   flavor: string;
   points?: number;
   cargoFamily?: CargoFamily;
+  available?: boolean;
   effect?: {
     draw?: number;
     ops?: number;
     work?: number;
     buys?: number;
-    special?: 'retire' | 'salvage' | 'gain-ops' | 'discard-redraw' | 'upgrade' | 'inspect';
+    conditionalWork?: 'cargo' | 'burden';
+    special?: 'retire' | 'salvage' | 'gain-ops' | 'discard-redraw' | 'upgrade' | 'inspect'
+      | 'crew-retire' | 'watch-discard' | 'retrieve' | 'cargo-reallocate' | 'logistics-retrieve';
   };
 }
 
@@ -58,8 +63,9 @@ export interface Crisis {
 export type Encounter = { kind: 'cruise' } | { kind: 'event' | 'crisis'; id: string };
 
 export type PendingChoice =
-  | { kind: 'retire'; source: CardId; min: number; max: number; bonusCargoWork?: number; upgrade?: boolean }
-  | { kind: 'discard'; source: CardId | 'event'; min: number; max: number; redraw: boolean; requiredType?: CardType }
+  | { kind: 'retire'; source: CardId; min: number; max: number; bonusCargoWork?: number; upgrade?: boolean; requiredId?: CardId; drawOnRetire?: number }
+  | { kind: 'discard'; source: CardId | 'event'; min: number; max: number; redraw: boolean; requiredType?: CardType; requiredTypes?: CardType[]; drawPerCard?: number; retrieveAfter?: boolean }
+  | { kind: 'retrieve'; source: CardId; min: number; max: number; requiredTypes?: CardType[] }
   | { kind: 'gain'; source: CardId; maxCost: number; requiredType?: CardType }
   | { kind: 'inspect'; source: CardId; cards: CardInstance[] };
 
@@ -70,7 +76,8 @@ export type ChoiceResolution =
 
 export interface LogEntry {
   month: number;
-  kind: 'turn' | 'card' | 'purchase' | 'event' | 'crisis' | 'retirement';
+  kind: 'turn' | 'card' | 'purchase' | 'event' | 'crisis' | 'retirement' | 'arrival';
+  arrivalTurn?: number;
   title: string;
   text: string;
 }
@@ -90,7 +97,7 @@ export interface GameState {
   nextUid: number;
   month: number;
   totalMonths: number;
-  phase: 'briefing' | 'event' | 'ops' | 'work' | 'crisis' | 'buy' | 'report' | 'arrived';
+  phase: 'briefing' | 'event' | 'ops' | 'work' | 'crisis' | 'buy' | 'report' | 'arrival-ready' | 'arrival-report' | 'arrival' | 'arrived';
   deck: CardInstance[];
   hand: CardInstance[];
   discard: CardInstance[];
@@ -106,5 +113,18 @@ export interface GameState {
   eventQueue: string[];
   allowedOps: CardId[] | null;
   crisisResults: CrisisResult[];
+  crisisWindow: { id: string; opened: number; deadline: number } | null;
+  arrival: ArrivalState | null;
   log: LogEntry[];
+}
+
+export type ArrivalObjective = 'trajectory' | 'ship' | 'surface';
+export interface ArrivalState {
+  turn: number;
+  status: 'active' | 'complete';
+  progress: Record<ArrivalObjective, number>;
+  deployed: CardInstance[];
+  sacrificed: CardId[];
+  damage: number;
+  fatigueTax: number;
 }

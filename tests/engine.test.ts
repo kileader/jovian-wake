@@ -70,9 +70,12 @@ function voyage(seed: string, months = 24) {
   return { state, encounters };
 }
 
-test('the catalogue contains the ten Ops and Cargo for every crisis response', () => {
+test('the open pool has fourteen Ops, six Work, four Cargo, and disables Systems Integration', () => {
   assert.equal(new Set(CARDS.map((card) => card.id)).size, CARDS.length);
-  assert.deepEqual(CARDS.filter((card) => card.type === 'Ops').map((card) => card.id).sort(), [...OPS].sort());
+  assert.equal(CARDS.filter(card => card.type === 'Ops' && card.available !== false).length, 14);
+  assert.equal(CARDS.filter(card => card.type === 'Work').length, 6);
+  assert.equal(CARDS.filter(card => card.type === 'Cargo').length, 4);
+  assert.equal(canAcquire(createGame('pool'), 'systems-integration'), false);
   const prices = [2, 3, 4, 4, 5, 5, 3, 2, 4, 5];
   OPS.forEach((id, index) => assert.equal(cardById(id).cost, prices[index], id));
   for (const crisis of CRISES) {
@@ -487,7 +490,7 @@ test('every crisis can be deferred with an empty deck, and deferred Burdens coun
     assert.equal(deferred.buys, 1);
     assert.equal(deferred.crisisResults.length, 1);
     const arrived = endMonth(deferred);
-    assert.equal(arrived.phase, 'arrived');
+    assert.equal(arrived.phase, 'arrival-ready');
     assert.equal(getScore(arrived).total, -crisis.burdenCount);
     assert.equal(resolveCrisis(arrived, 'defer'), arrived);
   }
@@ -525,7 +528,7 @@ test('score weights mixed Cargo in every owned zone and excludes retired Cargo',
 test('arrival occurs after exactly 12 or 24 months, including the final crisis', () => {
   for (const months of [12, 24]) {
     const { state, encounters } = voyage(`length-${months}`, months);
-    assert.equal(state.phase, 'arrived');
+    assert.equal(state.phase, 'arrival-ready');
     assert.equal(state.month, months);
     assert.equal(state.crisisResults.length, months / 3);
     assert.deepEqual(encounters, Array.from({ length: months }, (_, index) => ['cruise', 'event', 'crisis'][index % 3]));
