@@ -1,4 +1,6 @@
-export type SoundCue = 'deal' | 'play' | 'work' | 'gain' | 'retire' | 'discard' | 'burden';
+export type SoundCue =
+  | 'deal' | 'play' | 'work' | 'gain' | 'retire' | 'discard' | 'burden'
+  | 'tap' | 'confirm' | 'crisis' | 'end' | 'arrival' | 'launch' | 'cancel' | 'colony' | 'success';
 
 type Tone = { frequency: number; end?: number; delay?: number; duration: number; type?: OscillatorType };
 
@@ -22,6 +24,38 @@ const CUES: Record<SoundCue, Tone[]> = {
   burden: [
     { frequency: 130, end: 100, duration: 0.11, type: 'triangle' },
     { frequency: 95, duration: 0.12, delay: 0.09, type: 'triangle' },
+  ],
+  tap: [{ frequency: 850, end: 620, duration: 0.035, type: 'triangle' }],
+  confirm: [
+    { frequency: 440, duration: 0.055 },
+    { frequency: 660, duration: 0.08, delay: 0.04 },
+  ],
+  crisis: [
+    { frequency: 240, duration: 0.06, type: 'triangle' },
+    { frequency: 360, duration: 0.12, delay: 0.06, type: 'triangle' },
+  ],
+  end: [
+    { frequency: 390, duration: 0.08 },
+    { frequency: 260, duration: 0.12, delay: 0.065 },
+  ],
+  arrival: [
+    { frequency: 220, duration: 0.34 },
+    { frequency: 330, duration: 0.3, delay: 0.07 },
+    { frequency: 440, duration: 0.29, delay: 0.15 },
+  ],
+  launch: [
+    { frequency: 160, end: 320, duration: 0.19, type: 'triangle' },
+    { frequency: 480, duration: 0.14, delay: 0.13 },
+  ],
+  cancel: [{ frequency: 330, end: 220, duration: 0.07, type: 'triangle' }],
+  colony: [
+    { frequency: 190, duration: 0.04, type: 'triangle' },
+    { frequency: 570, duration: 0.095, delay: 0.035 },
+  ],
+  success: [
+    { frequency: 440, duration: 0.11 },
+    { frequency: 550, duration: 0.15, delay: 0.065 },
+    { frequency: 660, duration: 0.2, delay: 0.13 },
   ],
 };
 

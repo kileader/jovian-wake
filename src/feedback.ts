@@ -1,4 +1,5 @@
-import { cardById, ownedCards } from './engine.ts';
+import { cardById, getScore, ownedCards } from './engine.ts';
+import { CRISES } from './content.ts';
 import type { GameState } from './types.ts';
 import type { createSoundController, SoundCue } from './sound.ts';
 
@@ -47,8 +48,8 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
   function capture(): Views {
     clear();
     const views: Views = new Map();
-    app.querySelectorAll<HTMLElement>('[data-card], [data-supply], [data-inspect-card]').forEach(element => {
-      const key = element.dataset.supply ? `supply:${element.dataset.supply}` : element.dataset.card ?? element.dataset.inspectCard!;
+    app.querySelectorAll<HTMLElement>('[data-card], [data-supply-card], [data-inspect-card]').forEach(element => {
+      const key = element.dataset.supplyCard ? `supply:${element.dataset.supplyCard}` : element.dataset.card ?? element.dataset.inspectCard!;
       views.set(key, { element: element.cloneNode(true) as HTMLElement, rect: element.getBoundingClientRect() });
     });
     return views;
@@ -113,8 +114,18 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
     const moved = new Set([...played, ...retired].map(card => card.uid));
     const discarded = after.discard.filter(card => beforeOwned.has(card.uid) && !beforeDiscard.has(card.uid) && !moved.has(card.uid));
     const work = after.month === before.month ? after.workGenerated - before.workGenerated : 0;
+    const crisis = after.crisisResults.find(result => !before.crisisResults.some(previous => previous.month === result.month));
 
-    if (gained.length) {
+    if (after.phase === 'arrived' && before.phase !== 'arrived') {
+      message('Callisto reached', `${getScore(after).total} arrival points · mission debrief ready`, 'arrival');
+    } else if (crisis) {
+      const detail = crisis.response === 'work' ? `Spent ${crisis.workSpent} Work`
+        : crisis.response === 'cargo' ? `Consumed ${cardById(crisis.cargoSpent!).name}`
+        : `${crisis.burdensAdded} Burdens carried forward`;
+      message(CRISES.find(definition => definition.id === crisis.id)!.name, detail, 'crisis');
+    } else if (after.phase === 'report' && before.phase !== 'report') {
+      message(`Month ${after.month} complete`, 'Hand cleared · expedition log recorded', 'end');
+    } else if (gained.length) {
       message(`${cardById(gained[0].id).name} prepared`, 'Added to discard · returns in a later draw', 'gain');
     } else if (retired.length) {
       message(`${retired.length} ${retired.length === 1 ? 'card' : 'cards'} retired`, `${retired.map(card => cardById(card.id).name).join(' · ')}${work > 0 ? ` · +${work} Work` : ''}`, 'retire');
@@ -123,7 +134,7 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
       const detail = [work > 0 ? `+${work} Work` : '', drawn.length ? `Drew ${drawn.length}` : '', after.ops > before.ops ? `+${after.ops - before.ops} Ops available` : ''].filter(Boolean).join(' · ');
       message(title, detail || 'Procedure executed', played.every(card => cardById(card.id).type === 'Work') ? 'work' : 'play', played.length);
     } else if (after.month > before.month) {
-      message(`Month ${after.month} · new hand`, `${after.hand.length} cards dealt${burdens.length ? ' · new obligation aboard' : ''}`, 'deal', after.hand.length);
+      message(`Month ${after.month} · new hand`, `${after.hand.length} cards dealt${burdens.length ? ' · new obligation aboard' : ''}`, before.phase === 'briefing' ? 'launch' : 'deal', after.hand.length);
     } else if (burdens.length) {
       message(`${burdens.length} ${burdens.length === 1 ? 'Burden' : 'Burdens'} carried forward`, cardById(burdens[0].id).name, 'burden');
     } else if (before.pending?.kind === 'discard' && before.pending.redraw && !after.pending) {
@@ -169,6 +180,7 @@ export function createFeedback(app: HTMLElement, sound: ReturnType<typeof create
         animate(counter, [{ background: '#3c3423' }, { background: '#101c2b' }], 650);
       }
     }
+    return notice.childElementCount > 0;
   }
 
   return { capture, show, clear };

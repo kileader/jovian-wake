@@ -27,7 +27,9 @@ Open the URL printed by Vite, normally [localhost:5173](http://127.0.0.1:5173/).
 
 New voyages generate a random seed. The same seed and choices reproduce a run: enter a seed in the briefing, use a `?seed=CALLISTO-01` link, or choose **Replay this seed** after arrival. Explicit seed links preserve their seed on reload; opening the game without a seed generates a fresh one. Reloading starts over; there is no autosave. Older `months` URL parameters are ignored.
 
-Cards animate when dealt, played, acquired, discarded, or retired, with brief Work-gain feedback and quiet interface sounds. Use **Sound on/off** in the header to mute; that preference is remembered across reloads. Motion follows the device's reduced-motion preference. Feedback observes completed transitions and never delays input or changes seeded gameplay.
+Cards animate when dealt, played, acquired, discarded, or retired, with brief Work-gain feedback. Quiet interface sounds cover card browsing, selections, confirmations, crisis responses, month completion, arrival, and colony actions. Use **Sound on/off** in the header to mute; that preference is remembered across reloads. Motion follows the device's reduced-motion preference. Feedback observes completed transitions and never delays input or changes seeded gameplay.
+
+The cruise uses a compact card table: Ops plays sit beside the hand, Work and Buys sit beside acquisition, and available Work accompanies crisis repairs. Arrival score stays with the manifest. Supply categories show a selected card's full rules before acquisition. On small screens, **Hand / Supply** switches between those panes; entering acquisitions opens Supply, and a new month returns to Hand. Feedback appears in the center. The manifest, voyage log, and full rules expand below the table.
 
 ```sh
 npm test
@@ -135,6 +137,7 @@ src/
   feedback.ts   Card movement and resource feedback from state changes
   sound.ts      Synthesized interface sounds and remembered mute preference
   style.css     Dark space theme and responsive layout
+  table.css     Compact cruise table and mobile Hand/Supply panes
   debrief.ts    Read-only voyage and commissioning report
   debrief.css   Responsive expedition report layout
 tests/
