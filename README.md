@@ -40,6 +40,8 @@ npm run preview
 
 The build checks TypeScript and writes the static game to `dist/`. The game uses plain TypeScript, Vite, HTML, and CSS without a runtime framework or server.
 
+Application startup plays the standard silent Phicid Productions splash before the cruise or engineering briefing. A fresh key, mouse click, or gamepad button skips it; in-game resets do not replay it. See [browser splash reuse notes](studio/README-web.md) for assets, timing, input handling, and startup wiring.
+
 ## A month aboard
 
 Start with **7 Crew Shifts and 3 Colony Stores**. Each month starts with a five-card hand, one Ops play, and one Buy. An event can modify the opening hand.

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-startup>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,6 +7,11 @@
     <meta name="color-scheme" content="dark" />
     <meta name="description" content="Thirty people. One way to Jupiter. Build the expedition deck, weather the crossing, and preserve Cargo for Callisto." />
     <title>Jovian Wake — Cruise prototype</title>
+    <style>
+      html, body { margin: 0; background: #000; }
+      html[data-startup], html[data-startup] body { background: #000 !important; }
+      html[data-startup] #app { visibility: hidden; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
